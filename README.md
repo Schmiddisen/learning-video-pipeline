@@ -13,6 +13,10 @@ learning-science evidence suggests, and narration is cached so a line is never p
 - 2–4 videos of 8–12 minutes, each with a "guess first" question, a quick check after every
   section (about the *previous* section, so you actually have to remember), and recall
   questions at the end
+- a study player (a private Claude artifact): Claude grades your answers and sends you back to
+  the exact moment you missed, answers questions about whatever you circle on screen, asks you
+  to explain each video back, schedules flashcards that unlock as you watch (and syncs them
+  with Anki), designs a hands-on lab for every section and builds mixed exam practice
 - chapter markers, narration in your language, sync verified on the finished file
 - an Anki deck sized to your review budget, exercise hints (hint → method → solution), mixed
   practice across parts
@@ -41,7 +45,8 @@ asks a few questions about you (goal, what you already know, depth, language, bu
 | `/lvp:lecture 03 material/slides/03.pdf` | the whole pipeline for one part, stopping at two gates: the video plan and the narration cost |
 | `/lvp:ingest` · `/lvp:curriculum` · `/lvp:script` · `/lvp:review` · `/lvp:produce` · `/lvp:companion` | the individual steps |
 | `/lvp:feedback 2.2 at 9:15 refers to the slide` | finds the exact line, fixes it (and its siblings across the course), re-records only what changed, re-verifies |
-| `/lvp:player` | publishes the course as an interactive player: pauses at questions for your answer, circle anything on the picture and ask Claude about that exact moment |
+| `/lvp:player` | publishes the course as a study player: the video's questions graded by Claude, circle anything on the picture and ask about that moment, explain-back, flashcards (FSRS, synced with Anki) that unlock as you watch, hands-on labs, exam practice |
+| `/lvp:coach` | reads how you are actually doing in the player and adapts: targeted cards and labs, fixes to confusing videos, a note with focus moments in your Today panel |
 | `uv run lvp` | render menu for your final videos (4K/1080p/480p, one, a range or all) – uses recorded narration only, never pays |
 
 ## How it works

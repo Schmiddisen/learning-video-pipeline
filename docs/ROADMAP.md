@@ -17,6 +17,14 @@ Roughly in order. ✓ = done.
 - **Quality budget per video** – one config line for max narration spend and render time.
 
 ## Learning
+- ✓ **Tutor in the player** – graded answers with rewatch links and follow-ups, practice
+  questions, explain-back, Socratic mode, notes, cards from any moment.
+- ✓ **Flashcards in the player** – FSRS, cards unlock at the moment that teaches them, lapses
+  link back to the video; direct AnkiConnect bridge in the desktop app.
+- ✓ **Labs** – designed per section by Claude (verified against their own solution), Python
+  or JavaScript in the browser, graded hints, a lab tutor that runs code; authored labs.
+- ✓ **Exam practice** – interleaved across watched videos, graded report with rewatch links.
+- ✓ **Coach** – reads real learning data from the player and adapts the course.
 - ✓ **Interactive player as a Claude artifact** (`lvp-player` + the `player` skill) – live
   transcript, the video's questions as real input with Claude's feedback, draw on the frame and
   ask Claude with full context, progress saved per learner.

@@ -78,7 +78,8 @@ def test_player_matches_audio_names_to_lines():
     lines = ["First we count people.", "Then the formula: P(A|B).", "Then the formula again."]
     audio = "then-the-formula-p-a-b-1a2b3c4d_adjusted.mp3"
     assert _match(audio, lines, 0) == 1
-    assert _match("unknown-text-deadbeef.mp3", lines, 2) == 2  # no match: keep the order
+    assert _match("unknown-text-deadbeef.mp3", lines, 2) == -1  # script changed since
+    assert _match(audio, lines, 0, used={1}) == -1  # a line is never used twice
 
 
 def test_dump_keeps_question_order_within_a_list(tmp_path):

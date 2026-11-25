@@ -1,43 +1,45 @@
 ---
 name: player
-description: Publish the course's rendered videos as an interactive player (a private Claude artifact) – the learner watches, the video pauses at its questions for a typed answer, and they can circle something on the picture and ask Claude, who knows the exact moment, the narration and the text on screen. Use when the user wants to watch the course with Claude at hand, asks for "the player", or after a batch of videos is rendered.
+description: Publish the course as an interactive study player (a private Claude artifact) – videos with live transcript; the video's questions as real input graded by Claude; draw on the frame and ask Claude about that exact moment; explain-back after each video; flashcard review (FSRS) linked to the moments that teach each card, with a direct Anki bridge in the desktop app; hands-on labs Claude designs per section (Python/JavaScript in the browser); exam practice across videos. Use when the user wants to study the course, asks for "the player", or after videos are rendered.
 ---
 
-# Interactive player
-
-What the learner gets: the videos with a live transcript (word by word), chapters and
-question markers on the timeline; every pretest, check and recall question stops the video
-and takes a typed answer (Claude can judge it); "Mark" lets them draw on the frame; "Ask"
-sends Claude the frame (with the marks), the moment, the last lines, the on-screen text and
-the whole narration. Progress and answers are saved to their account.
+# Interactive study player
 
 ## 1. Export (free)
-Every video needs a build (`lvp-build`, 480p is plenty for watching on a laptop or phone).
+Every video needs a build (`lvp-build`; 480p is plenty to watch).
 ```bash
-uv run lvp-player --clean            # all videos with a build → build/player/
+uv run lvp-player --clean                 # all built videos → build/player/
+uv run lvp-player --only-data             # after changing cards/labs/learner.md: data + page only
 ```
-It writes `build/player/index.html` (the page), `course.json` (timeline per video) and
-`videos/*.mp4` (re-encoded to ≤ 14 MB each, the artifact's per-file limit). Builds made with
-older engine versions work too: narration text, word timings and question times are
-reconstructed (question times are then estimates – fine for pausing).
+Writes `build/player/`: `index.html`, `app.js`, `review.js`, `labs.js`, `exam.js`,
+`lab-worker.js` (the page), `course.json` (timeline per video, cards linked to their moment,
+authored labs, the learner profile), `videos/*.mp4` (≤ 14 MB each) and `pyodide/` (Python
+for the labs, downloaded once; `--no-python` for JavaScript-only labs). Older builds work
+too: text, word timings and question times are reconstructed.
 
 ## 2. Publish as an artifact
-Load the `artifact-capabilities` skill first (it is required before declaring capabilities).
-Then publish `build/player/index.html` with the Artifact tool:
-- `files`: `{"course.json": "build/player/course.json", "videos/<id>.mp4": "build/player/videos/<id>.mp4", …}`
-- `capabilities`: `{"sample": {"images": true}, "db": {}, "user": {}, "dictation": {}}`
-- `icon`: `"video"`; a one-sentence `description`.
+Load the `artifact-capabilities` skill first. Publish `build/player/index.html` with:
+- `files`: every other file in `build/player/` at its relative path (`course.json`,
+  `app.js`, `review.js`, `labs.js`, `exam.js`, `lab-worker.js`, `pyodide/<each file>`,
+  `videos/<id>.mp4`)
+- `capabilities`: `{"sample": {"images": true}, "db": {}, "user": {}, "dictation": {}, "desktop": {}}`
+- `icon`: `"video"`, a one-sentence `description`.
 
-One publish carries at most 64 MB: publish the page with `course.json` and the first videos,
-then add the remaining videos in further publishes **to the same URL** (files not named are
-kept). A version holds at most 256 MB – for larger courses lower `--max-mb` or publish one
-artifact per part (`uv run lvp-player videos/v03_*/*.py`).
+One publish carries at most 64 MB: first the page, scripts, `course.json`, `pyodide/` and a
+few videos, then the remaining videos in further publishes **to the same URL** (files not
+named are kept). A version holds at most 256 MB; for bigger courses lower `--max-mb` or
+publish one player per part. Later updates only send what changed (scripts, `course.json`).
 
 ## 3. Check and hand over
-After the first publish, read back the progress store once (`ArtifactData` `list` on
-`data/users/…` is private – an empty result is expected) and open the page. Tell the user:
-the artifact is private; asking Claude uses their own Claude usage; the first question asks
-for permission; it works on claude.ai, in the desktop app (installable as its own window) and
-on phones (dictation only on desktop Chromium/the desktop app).
+After the first publish: one `ArtifactData` `list` of `data/users/me` (empty until the
+learner opens it). Tell the user:
+- it is private; Claude features use their own Claude usage and ask once for permission;
+- **Anki**: install the player as an app (Claude desktop app → artifact menu → Install as
+  app), keep Anki open with AnkiConnect (add-on 2055492159), open Review → Connect to Anki.
+  It matches the course's notes, sends reviews, can follow Anki's schedule, add missing
+  cards and sync AnkiWeb (so AnkiDroid stays in step). Without it, review runs in the player;
+  pending reviews go to Anki the next time it connects.
+- dictation works on desktop Chromium and the desktop app.
 
-Re-run steps 1–2 (same URL) whenever videos are re-rendered; progress is kept.
+Re-run 1–2 (same URL) when videos change; the learner's progress is kept. Use the `coach`
+skill to read how the learner is doing and adapt the course.

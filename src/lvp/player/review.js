@@ -34,7 +34,15 @@
   const mine = () => { const m = store.get("mine"); if (m) { m.cards ||= []; return m; } store.data.mine = { _key: "mine", cards: [] }; return store.data.mine; };
   const settings = () => store.get("review-settings") || { _key: "review-settings", newPerDay: 20, ankiMode: false };
   const today = () => new Date().toISOString().slice(0, 10);
-  const allCards = () => [...(course?.cards || []), ...mine().cards];
+  // the video's own check questions come back as spaced cards (lag-1 in the video, days later here)
+  let quizCards = [];
+  const buildQuizCards = () => {
+    quizCards = [];
+    for (const v of course.videos) v.quizzes.forEach((q, i) => {
+      if (q.quiz === "check" && q.a) quizCards.push({ id: `q-${v.id}-${i}`, deck: `${course.title}::${LVP.videoLabel(v)}`, front: q.q, back: q.a, video: v.id, t: Math.max(0, q.t - 1), tags: ["video-question"] });
+    });
+  };
+  const allCards = () => [...(course?.cards || []), ...quizCards, ...mine().cards];
   const plain = (s) => String(s || "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
   const norm = (s) => plain(s).toLowerCase().replace(/\{\{c\d+::([^}]*?)(::[^}]*)?\}\}/g, "$1").replace(/[^\p{L}\p{N}]+/gu, "").slice(0, 60);
 
@@ -268,6 +276,7 @@
   LVP.panels.review = render;
   LVP.hooks.ready.push(async (c, fromAccount) => {
     course = c; T = S[(c.language || "en").slice(0, 2)] || S.en;
+    buildQuizCards();
     if (F && !fsrs) fsrs = F.fsrs(F.generatorParameters({ request_retention: 0.9, enable_fuzz: true }));
     LVP.updateDue();
     if (fromAccount || anki.desktop !== null) return;

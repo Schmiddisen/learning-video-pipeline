@@ -83,13 +83,24 @@ def _section_lines(scene: Path) -> dict[str, list[str]]:
     return out
 
 
-def _match(audio: str, candidates: list[str], start: int) -> int:
-    """Index of the candidate whose text the audio file name was made from (fallback: next)."""
+def _match(audio: str, candidates: list[str], start: int, used: set[int] | None = None) -> int:
+    """Index of the candidate whose text the audio file name was made from.
+
+    Searches forward from ``start`` first, then anywhere unused; -1 if no line matches (the
+    scene file changed after the build)."""
+    used = used or set()
     slug = _norm(re.sub(r"-[0-9a-f]{8}.*$", "", Path(audio).name))[:24]
-    for i in range(start, len(candidates)):
-        if slug and _norm(candidates[i]).startswith(slug):
+    order = [*range(start, len(candidates)), *range(0, min(start, len(candidates)))]
+    for i in order:
+        if slug and i not in used and _norm(candidates[i]).startswith(slug):
             return i
-    return min(start, len(candidates) - 1)
+    return -1
+
+
+def _from_slug(audio: str) -> str:
+    """Readable start of a line from its audio file name (when the script has changed since)."""
+    words = re.sub(r"-[0-9a-f]{8}.*$", "", Path(audio).name).split("-")
+    return (" ".join(words).capitalize() + " …") if words and words[0] else ""
 
 
 def _words(text: str, audio: Path, t0: float) -> list[list]:
@@ -155,7 +166,7 @@ def export_video(scene: Path, quality: str | None, max_mb: float) -> dict | None
         entries = [json.loads(x) for x in f.read_text(encoding="utf-8").splitlines() if x]
         end = next((e["end"] for e in reversed(entries) if "end" in e and "voice" not in e), 0.0)
         info["sections"].append({"name": name, "t": round(t0, 2), "end": round(t0 + end, 2)})
-        cursor, quizzes = 0, []
+        cursor, quizzes, used = 0, [], set()
         for e in entries:
             if "chapter" in e:
                 info["chapters"].append({"t": round(t0 + e["t"], 2), "title": e["chapter"]})
@@ -163,8 +174,12 @@ def export_video(scene: Path, quality: str | None, max_mb: float) -> dict | None
                 audio = Path(e["audio"])
                 text = e.get("text")
                 if text is None and texts.get(name):
-                    i = _match(audio.name, texts[name], cursor)
-                    text, cursor = texts[name][i], i + 1
+                    i = _match(audio.name, texts[name], cursor, used)
+                    if i >= 0:
+                        text, cursor = texts[name][i], i + 1
+                        used.add(i)
+                    else:
+                        text = _from_slug(audio.name)
                 start = t0 + e["voice"]
                 stop = t0 + e["end"] if "end" in e else start + (
                     _probe(audio) if audio.exists() else 3.0)  # fmt: skip

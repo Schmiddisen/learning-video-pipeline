@@ -41,7 +41,8 @@ const STR = {
     notes: "Your notes", chapters: "Chapters and questions", none: "Nothing yet.",
     todayTitle: "Today", continueAt: "Continue", dueCards: "cards due for review", weak: "Moments to revisit",
     explainTodo: "Explain back what you watched", allVideos: "All videos", labTodo: "Try the lab for",
-    noTodo: "All caught up. Pick the next video or ask Claude for a challenge."
+    noTodo: "All caught up. Pick the next video or ask Claude for a challenge.",
+    examBtn: "Exam practice", coach: "From your coach", sure: "I'm sure", unsure: "Not sure", guessing: "Guessing"
   },
   de: {
     kicker: "Kurs", tabs: { ask: "Fragen", map: "Video", review: "Wiederholen", lab: "Labor", course: "Heute" },
@@ -81,7 +82,8 @@ const STR = {
     notes: "Deine Notizen", chapters: "Kapitel und Fragen", none: "Noch nichts.",
     todayTitle: "Heute", continueAt: "Weiter mit", dueCards: "Karten fällig", weak: "Stellen zum Nachholen",
     explainTodo: "Erklär zurück, was du gesehen hast", allVideos: "Alle Videos", labTodo: "Probier das Labor zu",
-    noTodo: "Alles erledigt. Nimm dir das nächste Video vor oder lass dir von Claude eine Herausforderung geben."
+    noTodo: "Alles erledigt. Nimm dir das nächste Video vor oder lass dir von Claude eine Herausforderung geben.",
+    examBtn: "Klausurtraining", coach: "Von deinem Coach", sure: "Sicher", unsure: "Unsicher", guessing: "Geraten"
   }
 };
 
@@ -337,6 +339,8 @@ function learnerContext() {
     for (const [k, a] of Object.entries(p.answers || {})) if (a.verdict && a.verdict !== "right") misses.push(`${videoLabel(v)}: "${k.split(":").slice(1).join(":")}" (${a.verdict})`);
   }
   if (misses.length) lines.push("Questions they recently got wrong or partly wrong:\n- " + misses.slice(-8).join("\n- "));
+  const exam = LVP.examMisses?.() || [];
+  if (exam.length) lines.push("Exam practice questions they missed:\n- " + exam.map((x) => x.q).join("\n- "));
   const lapses = LVP.review?.struggles?.() || [];
   if (lapses.length) lines.push("Flashcards they keep forgetting:\n- " + lapses.slice(0, 6).join("\n- "));
   const notes = prog().notes.slice(-6).map((n) => `[${fmt(n.t)}] ${n.text}`);
@@ -455,13 +459,14 @@ function verdictBox(res) {
   const fb = el("span"); renderRich(fb, String(res.feedback || "")); box.append(fb);
   return box;
 }
-async function grade(q, answer) {
+async function grade(q, answer, confidence) {
   const sec = sectionAt(q.t);
   const prompt = [
     `You grade a learner's answer to a question in the video "${cur.title}" of the course "${course.title}".`,
     `Question: ${q.q}`,
     q.a ? `Reference answer: ${q.a}` : "There is no reference answer; judge from the narration.",
     `Learner's answer: ${answer || "(empty)"}`,
+    confidence ? `They said they were ${confidence === "sure" ? "sure" : confidence === "unsure" ? "unsure" : "guessing"}. If they were sure and wrong, say clearly and kindly why the tempting idea fails – a confident error corrected now sticks best. If they were guessing and right, tell them why it is right so the guess becomes knowledge.` : "",
     "", "Narration of the video (with timestamps):", transcriptText(Math.max(0, sec.t - 240), sec.end + 30, 14000),
     "", "Reply with only a JSON object:",
     '{"verdict": "right" | "partly" | "wrong", "feedback": "1-3 sentences in the language of the question: what exactly is right, what is missing or wrong. Address the learner as you.", "rewatch": "m:ss of the moment in the narration that explains what they missed, or null", "followup": {"q": "a different, short question on the same idea that they can answer now", "a": "its answer"} or null}',
@@ -477,6 +482,16 @@ function openQuiz(q, opts = {}) {
   const ta = el("textarea"); ta.placeholder = L.quizPlaceholder; ta.setAttribute("aria-label", L.quizPlaceholder);
   const prev = q.quiz !== "practice" && q.quiz !== "followup" ? prog().answers[quizKey(q)] : null;
   ta.value = prev?.text || "";
+  let confidence = null;
+  if (q.quiz !== "pretest") {
+    const conf = el("div", "chips");
+    for (const [k, label] of [["sure", L.sure], ["unsure", L.unsure], ["guess", L.guessing]]) {
+      const c = el("button", "chip", label); c.setAttribute("aria-pressed", "false");
+      c.onclick = () => { confidence = k; for (const x of conf.children) x.setAttribute("aria-pressed", String(x === c)); };
+      conf.append(c);
+    }
+    card.append(conf);
+  }
   const row = el("div", "row");
   const ok = el("button", "btn primary", q.quiz === "pretest" ? L.submitGuess : L.submit);
   const skip = el("button", "btn", L.skip);
@@ -487,7 +502,7 @@ function openQuiz(q, opts = {}) {
   ok.onclick = async () => {
     const text = ta.value.trim();
     ta.disabled = true; row.remove();
-    const record = q.quiz === "practice" || q.quiz === "followup" ? null : (prog().answers[quizKey(q)] = { text, at: Date.now() });
+    const record = q.quiz === "practice" || q.quiz === "followup" ? null : (prog().answers[quizKey(q)] = { text, at: Date.now(), confidence });
     if (record) { saveProg(cur.id, true); updateWhere(video.currentTime); }
     const out = el("div"); out.style.display = "grid"; out.style.gap = "10px"; card.append(out);
     const cont = el("button", "btn primary", opts.free ? "OK" : L.cont); cont.onclick = finish;
@@ -496,7 +511,7 @@ function openQuiz(q, opts = {}) {
     if (!sample || !text) { out.append(rowOf(cont)); return; }
     const wait = el("p", "hint", L.grading); out.append(wait);
     try {
-      const res = await grade(q, text);
+      const res = await grade(q, text, confidence);
       wait.remove(); out.append(verdictBox(res));
       if (record) { record.verdict = res.verdict; record.feedback = res.feedback; record.rewatch = parseTs(res.rewatch); saveProg(cur.id, true); }
       const r = el("div", "row");
@@ -662,6 +677,17 @@ LVP.panels.map = () => {
 LVP.panels.course = () => {
   const box = $("course"), L = LVP.L; box.textContent = "";
   box.append(el("h2", "h", L.todayTitle));
+  const coach = Store.get("coach");
+  if (coach?.message) {
+    const c = el("div", "verdict"); c.append(el("b", null, L.coach));
+    const m = el("span"); renderRich(m, String(coach.message)); c.append(m);
+    for (const f of (coach.focus || []).slice(0, 5)) {
+      const v = course.videos.find((x) => x.id === f.video); if (!v) continue;
+      const b = el("button", "btn small", `${videoLabel(v)} ${f.t != null ? fmt(f.t) : ""}`); b.style.margin = "6px 6px 0 0";
+      b.onclick = () => LVP.seek(v.id, Number(f.t) || 0); if (f.why) b.title = String(f.why); c.append(b);
+    }
+    box.append(c);
+  }
   const todo = el("div", "today"); let n = 0;
   const add = (text, f) => { const b = el("button", "todo"); b.append(el("span", "n", String(++n)), el("span", null, text)); b.onclick = f; todo.append(b); };
   const due = LVP.review?.dueCount?.() || 0;
@@ -678,6 +704,7 @@ LVP.panels.course = () => {
   for (const v of course.videos) for (const [k, a] of Object.entries(Store.get("p-" + v.id)?.answers || {})) if (a.verdict && a.verdict !== "right" && a.rewatch != null) weak.push({ v, k, a });
   if (n === 0 && !weak.length) todo.append(el("p", "hint", L.noTodo));
   box.append(todo);
+  if (LVP.exam && sample) { const ex = el("button", "btn", L.examBtn); ex.onclick = () => LVP.exam.open(); box.append(rowOf(ex)); }
   if (weak.length) {
     box.append(el("p", "section-title", L.weak));
     for (const w of weak.slice(-6).reverse()) {
