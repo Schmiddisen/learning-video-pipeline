@@ -517,7 +517,7 @@ function openQuiz(q, opts = {}) {
   const row = el("div", "row");
   const ok = el("button", "btn primary", q.quiz === "pretest" ? L.submitGuess : L.submit);
   const skip = el("button", "btn", L.skip);
-  row.append(ok, skip); card.append(ta, row);
+  row.append(ok, skip, micFor(ta)); card.append(ta, row);
   setTimeout(() => ta.focus({ preventScroll: true }), 60);
   const finish = () => { closeCard(); if (q.answer_t && !opts.free) video.currentTime = q.answer_t; lastT = video.currentTime; if (!opts.free) video.play().catch(() => {}); };
   skip.onclick = finish;
@@ -581,7 +581,7 @@ function openExplain() {
   const prev = prog().explain; if (prev) ta.value = prev.text;
   const go = el("button", "btn primary", L.explainSubmit), no = el("button", "btn", L.cancel);
   no.onclick = closeCard;
-  const row = rowOf(go, no); card.append(ta, row);
+  const row = rowOf(go, no, micFor(ta)); card.append(ta, row);
   if (prev?.result) card.append(renderExplain(prev.result));
   go.onclick = async () => {
     const text = ta.value.trim(); if (!text || !sample) return;
@@ -623,7 +623,7 @@ $("note-btn").onclick = () => {
   const ta = el("textarea"); ta.placeholder = LVP.L.notePlaceholder;
   const s = el("button", "btn primary", LVP.L.save), c = el("button", "btn", LVP.L.cancel);
   s.onclick = () => { if (ta.value.trim()) addNote(t, ta.value.trim()); closeCard(); };
-  c.onclick = closeCard; card.append(ta, rowOf(s, c)); setTimeout(() => ta.focus(), 50);
+  c.onclick = closeCard; card.append(ta, rowOf(s, c, micFor(ta))); setTimeout(() => ta.focus(), 50);
 };
 
 /* ---------- flashcard from a moment or an answer ---------- */
@@ -761,18 +761,31 @@ LVP.panels.course = () => {
 };
 
 /* ---------- dictation ---------- */
+// one dictation session at a time, written into whichever text box started it
+let dict = null, dictTarget = null, dictBase = "", dictBtn = null;
 function setupDictation(d) {
   if (!d) return;
-  const mic = $("mic"); mic.hidden = false; let base = "";
-  d.onPartial(({ text }) => { $("ask-input").value = base + text; });
-  d.onFinal(({ text }) => { base = base + text + " "; $("ask-input").value = base; });
-  d.onState(({ state, reason }) => { mic.setAttribute("aria-pressed", String(state === "listening" || state === "starting")); if (state === "idle" && (reason === "not_granted" || reason === "unavailable")) mic.hidden = true; });
-  mic.onclick = () => {
-    if (mic.getAttribute("aria-pressed") === "true") { d.stop().catch(() => {}); return; }
-    base = $("ask-input").value ? $("ask-input").value + " " : "";
-    if (!video.paused) video.pause();
-    d.start().catch(() => {});
-  };
+  dict = d;
+  d.onPartial(({ text }) => { if (dictTarget) dictTarget.value = dictBase + text; });
+  d.onFinal(({ text }) => { if (!dictTarget) return; dictBase = dictBase + text + " "; dictTarget.value = dictBase; dictTarget.dispatchEvent(new Event("input")); });
+  d.onState(({ state, reason }) => {
+    const on = state === "listening" || state === "starting";
+    dictBtn?.setAttribute("aria-pressed", String(on));
+    if (state === "idle") { if (reason === "not_granted" || reason === "unavailable") { dict = null; document.querySelectorAll(".micbtn").forEach((b) => { b.hidden = true; }); } dictBtn = null; }
+  });
+  const mic = $("mic"); mic.hidden = false; mic.classList.add("micbtn");
+  mic.onclick = () => dictate($("ask-input"), mic);
+}
+function dictate(target, btn) {
+  if (!dict) return;
+  if (btn.getAttribute("aria-pressed") === "true") { dict.stop().catch(() => {}); return; }
+  dictTarget = target; dictBtn = btn; dictBase = target.value ? target.value + " " : "";
+  if (!video.paused) video.pause();
+  dict.start().catch(() => {});   // straight from the click – nothing awaited before it
+}
+function micFor(target) {
+  const b = el("button", "iconbtn micbtn"); b.innerHTML = "&#127908;"; b.setAttribute("aria-pressed", "false"); b.title = "Dictate";
+  b.hidden = !dict; b.onclick = () => dictate(target, b); return b;
 }
 
 /* ---------- start ---------- */

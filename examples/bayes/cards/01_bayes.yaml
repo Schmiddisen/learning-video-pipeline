@@ -22,7 +22,7 @@ cards:
   - id: b-second-test
     tags: [v1.2, updating]
     front: Why does a second independent positive move 9 % to about 91 %, not to 18 %?
-    back: It multiplies the odds again (1 : 10 × 99 = 99 : 10). Evidence multiplies odds; it does not add percentages.
+    back: "It multiplies the odds again (1 : 10 × 99 = 99 : 10). Evidence multiplies odds; it does not add percentages."
   - id: b-formula-parts
     tags: [v1.2, formula]
     front: "In P(sick | +) = P(+ | sick) · P(sick) / P(+), what do top and bottom count?"
