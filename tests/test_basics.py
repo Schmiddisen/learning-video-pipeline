@@ -89,3 +89,22 @@ def test_dump_keeps_question_order_within_a_list(tmp_path):
     f.write_text('class S1A:\n    def construct(self):\n        self.recall(["Zeta?", "Alpha?"])\n')
     out = dump([f])
     assert out.index("Zeta?") < out.index("Alpha?")
+
+
+def test_player_links_cards_and_labs_to_videos(tmp_path):
+    from lvp.player import cards_for, labs_for
+
+    odds = [{"t": 12.0, "text": "Odds multiply evidence"}, {"t": 40.0, "text": "A second test"}]
+    videos = [
+        {"id": "v02_1_intro", "duration": 100, "lines": [{"t": 5.0, "text": "Counting people"}]},
+        {"id": "v02_2_odds", "duration": 100, "lines": odds},
+    ]
+    (tmp_path / "c.yaml").write_text(
+        'deck: "D"\ncards:\n  - id: a\n    tags: [v2.2]\n    front: "Why do odds multiply?"\n'
+        '    back: "Evidence multiplies them."\n',
+        encoding="utf-8",
+    )
+    card = cards_for(tmp_path, videos)[0]
+    assert card["video"] == "v02_2_odds" and card["t"] == 12.0
+    (tmp_path / "l.yaml").write_text("labs:\n  - video: v2.1\n    title: T\n", encoding="utf-8")
+    assert labs_for(tmp_path, videos)[0]["video"] == "v02_1_intro"
