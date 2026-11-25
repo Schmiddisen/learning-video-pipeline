@@ -1,0 +1,52 @@
+labs:
+  - video: v1.1
+    title: Count a population by simulation
+    lang: python
+    goal: |
+      Simulate 100 000 people with a 1-in-1000 disease and a 99 % accurate test, then measure
+      what fraction of the positives are really sick. Your number should land near the 9 % the
+      video counted – and you can change the rarity to watch it move.
+    starter: |
+      import random
+      random.seed(1)
+
+      def simulate(n, prevalence, accuracy):
+          """Return (sick_and_positive, all_positive) for n random people."""
+          sick_pos = all_pos = 0
+          for _ in range(n):
+              sick = random.random() < prevalence
+              # TODO: the test is right with probability `accuracy`
+              positive = False
+              # TODO: count
+          return sick_pos, all_pos
+
+      sp, ap = simulate(100_000, 0.001, 0.99)
+      print(f"{sp} of {ap} positives are sick: {sp / max(ap, 1):.1%}")
+    check: |
+      sp, ap = simulate(200_000, 0.001, 0.99)
+      share = sp / max(ap, 1)
+      assert ap > 1000, "far too few positives – do healthy people ever test positive?"
+      assert 0.05 < share < 0.14, f"share of sick among positives is {share:.1%}, expected about 9 %"
+      sp2, ap2 = simulate(200_000, 0.01, 0.99)
+      assert 0.4 < sp2 / max(ap2, 1) < 0.6, "with 1 in 100 the share should be about one half"
+      print("ALL CHECKS PASSED")
+    hints:
+      - "A sick person tests positive when the test is right; a healthy person tests positive when it is wrong."
+      - "Draw one random number for the test: right = random.random() < accuracy. Then positive = right if sick else not right."
+      - "positive = (random.random() < accuracy) == sick  – then add 1 to all_pos if positive, and to sick_pos if also sick."
+    solution: |
+      import random
+      random.seed(1)
+
+      def simulate(n, prevalence, accuracy):
+          sick_pos = all_pos = 0
+          for _ in range(n):
+              sick = random.random() < prevalence
+              positive = (random.random() < accuracy) == sick
+              if positive:
+                  all_pos += 1
+                  sick_pos += sick
+          return sick_pos, all_pos
+
+      sp, ap = simulate(100_000, 0.001, 0.99)
+      print(f"{sp} of {ap} positives are sick: {sp / max(ap, 1):.1%}")

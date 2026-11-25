@@ -24,7 +24,9 @@ unreviewed narration – every change after recording costs money again.
    problems (clipping, collisions, unreadable text); ignore fades caught mid-transition.
 5. **Companion:** if cards changed, `uv run lvp-anki` (writes `cards/*.apkg` in the current
    format plus `all_decks.apkg`).
-6. **Hand over:** commit and push. Tell the user what to render: `uv run lvp` → choose quality
-   (4K for watching) → `a` / `v2` / `4-7`. Their render uses only recorded narration and
-   never pays. Ask them to report problems as "video at mm:ss: what's wrong" – the `feedback`
-   skill handles that.
+6. **Hand over:** commit and push, then update the study player (`player` skill) – that is
+   where the learner watches, answers, reviews and practises. For a 4K file to keep:
+   `uv run lvp` → choose quality → `a` / `v2` / `4-7` (recorded narration only, never pays).
+   Ask them to report problems as "video at mm:ss: what's wrong" – the `feedback` skill
+   handles that – or simply to keep using the player: the `coach` skill reads what they
+   struggle with.

@@ -1,0 +1,29 @@
+deck: "Bayes in Practice::01 Counting and odds"
+cards:
+  - id: b-base-rate-why
+    tags: [v1.1, base-rate]
+    front: A 99 % accurate test is positive for a 1-in-1000 disease. Why is "sick" still unlikely?
+    back: The healthy crowd is so large that its 1 % false alarms (about 10 per 1000) outnumber the one true positive.
+  - id: b-count-method
+    tags: [v1.1, counting]
+    front: What is the quickest reliable way to judge a positive test result without a formula?
+    back: Imagine 1000 people, count the true positives and the false alarms, and take true / all positives.
+  - id: b-rarity-flip
+    tags: [v1.1, base-rate]
+    front: Same 99 % test, but the disease is 1 in 100. What does a positive result mean?
+    back: About 10 true vs. 10 false positives per 1000 – roughly a 50 % chance of being sick.
+  - id: b-odds-form
+    tags: [v1.2, odds]
+    cloze: "Bayes in odds form: odds after = {{c1::odds before}} × {{c2::likelihood ratio}}"
+  - id: b-likelihood-ratio
+    tags: [v1.2, odds]
+    front: A test says positive for 99 % of the sick and 1 % of the healthy. What is its likelihood ratio for a positive?
+    back: 99 % / 1 % = 99 – a positive is 99 times more likely if you are sick.
+  - id: b-second-test
+    tags: [v1.2, updating]
+    front: Why does a second independent positive move 9 % to about 91 %, not to 18 %?
+    back: It multiplies the odds again (1 : 10 × 99 = 99 : 10). Evidence multiplies odds; it does not add percentages.
+  - id: b-formula-parts
+    tags: [v1.2, formula]
+    front: "In P(sick | +) = P(+ | sick) · P(sick) / P(+), what do top and bottom count?"
+    back: The top counts the sick who test positive, the bottom everyone who tests positive.

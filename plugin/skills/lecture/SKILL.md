@@ -16,9 +16,12 @@ Usage idea: "/lvp:lecture 05 material/slides/05_hashing.pdf"
    course).
 6. `produce` – cost preview → **Gate 2: confirm the amount** (skip if within an agreed
    budget) → record → 480p verify → critic → fixes.
-7. `companion` – cards for this part, exercise companion if exercises exist.
-8. Commit, push, and report in a few lines: videos (titles, lengths), cost, what to render,
-   anything left open.
+7. `companion` – cards for this part, exercise companion if exercises exist; for topics
+   where doing beats reading, an authored lab in `labs/` (the player designs more on demand).
+8. `player` – export and republish the study player (same URL as before; only the new
+   videos and data are uploaded).
+9. Commit, push, and report in a few lines: videos (titles, lengths), cost, the player link,
+   what to render in 4K, anything left open. Suggest the `coach` skill after a week of use.
 
 Keep the user informed at each step with one line; don't wait for confirmation except at the
 two gates.
