@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -23,7 +24,9 @@ def _seconds(ts: str) -> float:
 
 
 def _plan_dir(scene: Path, quality: str | None) -> Path:
-    dirs = sorted(BUILD.glob(f"plan/{scene.stem}_*"), key=lambda d: d.stat().st_mtime)
+    own = re.compile(re.escape(scene.stem) + r"_[a-z]\d*")  # "x_l15", not "x_more_l15"
+    dirs = [d for d in BUILD.glob(f"plan/{scene.stem}_*") if own.fullmatch(d.name)]
+    dirs.sort(key=lambda d: d.stat().st_mtime)
     if quality:
         dirs = [d for d in dirs if d.name == f"{scene.stem}_{quality}"]
     if not dirs:
