@@ -1,0 +1,14 @@
+{
+  "name": "learning-video-pipeline",
+  "owner": { "name": "Schmiddisen" },
+  "metadata": {
+    "description": "Turn any course material into short, synced explainer videos, spaced-repetition cards and exercise companions."
+  },
+  "plugins": [
+    {
+      "name": "lvp",
+      "source": "./plugin",
+      "description": "Learning Video Pipeline: ingest material, plan a curriculum, write and review scripts, produce narrated Manim videos with built-in retrieval practice, Anki decks and exercise companions."
+    }
+  ]
+}

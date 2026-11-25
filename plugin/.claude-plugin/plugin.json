@@ -1,0 +1,10 @@
+{
+  "name": "lvp",
+  "version": "0.1.0",
+  "description": "Learning Video Pipeline: course material → curriculum → reviewed scripts → narrated, sync-verified 3Blue1Brown-style videos with retrieval practice, plus Anki decks and exercise companions.",
+  "author": { "name": "Schmiddisen" },
+  "homepage": "https://github.com/Schmiddisen/learning-video-pipeline",
+  "repository": "https://github.com/Schmiddisen/learning-video-pipeline",
+  "license": "MIT",
+  "keywords": ["learning", "education", "manim", "video", "anki", "spaced-repetition"]
+}

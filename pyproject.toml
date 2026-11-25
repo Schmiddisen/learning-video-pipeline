@@ -1,0 +1,69 @@
+[project]
+name = "lvp"
+version = "0.1.0"
+description = "Learning Video Pipeline: turn any course material into short, synced 3Blue1Brown-style videos, spaced-repetition cards and exercise companions – driven by Claude Code."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "manim>=0.22",
+    "manim-voiceover>=0.4",
+    "genanki>=0.13",
+    "anki>=25.2",  # re-export decks in the current .apkg format (AnkiDroid)
+    "pyyaml>=6",
+    "numpy",
+]
+
+[project.optional-dependencies]
+# PDF/slide digests (lvp-digest)
+material = ["pymupdf>=1.24"]
+# lecture recordings → transcripts (lvp-transcribe)
+transcribe = ["faster-whisper>=1.1", "av>=11,<17"]
+# NVIDIA runtime libs for GPU transcription
+gpu = [
+    "nvidia-cublas-cu12; sys_platform != 'darwin'",
+    "nvidia-cudnn-cu12>=9,<10; sys_platform != 'darwin'",
+]
+
+[project.scripts]
+lvp = "lvp.menu:main"
+lvp-init = "lvp.init:main"
+lvp-build = "lvp.build:main"
+lvp-check = "lvp.check:main"
+lvp-narrate = "lvp.narrate:main"
+lvp-critic = "lvp.critic:main"
+lvp-anki = "lvp.anki:main"
+lvp-digest = "lvp.digest:main"
+lvp-transcribe = "lvp.transcribe:main"
+lvp-dump = "lvp.dump:main"
+lvp-locate = "lvp.locate:main"
+lvp-player = "lvp.player:main"
+
+[dependency-groups]
+dev = ["ruff>=0.8", "pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lvp"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S603"]
+"examples/**" = ["S101", "E501"]
+"src/lvp/style.py" = ["S105", "S106"]
+
+[tool.uv]
+required-environments = [
+    "sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
