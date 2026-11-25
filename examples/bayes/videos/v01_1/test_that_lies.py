@@ -8,7 +8,19 @@
 #   S3  ending: cliffhanger into odds; recall
 # Opening: a question most people answer wrong. Building: concrete before abstract (count first).
 
-from manim import DOWN, RIGHT, UP, Create, FadeIn, GrowFromEdge, Rectangle, Square, Transform, VGroup
+from manim import (
+    DOWN,
+    LEFT,
+    RIGHT,
+    UP,
+    Create,
+    FadeIn,
+    GrowFromEdge,
+    Rectangle,
+    Square,
+    Transform,
+    VGroup,
+)
 
 from lvp.props import question
 from lvp.style import ACCENT, FG, MUTED, NEGATIVE, POSITIVE, LessonScene, label

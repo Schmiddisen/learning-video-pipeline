@@ -27,7 +27,7 @@
       dailyNew: "Neue Karten pro Tag", notify: "Karten sind fällig"
     }
   };
-  let T = S.en, course = null, fsrs = null, current = null, revealed = false;
+  let T = S.en, course = null, fsrs = null, current = null, revealed = false, focusIds = null;
   const F = window.FSRS;
   const store = LVP.store;
   const srs = () => { const s = store.get("srs"); if (s) { s.cards ||= {}; s.log ||= []; s.newDays ||= {}; return s; } store.data.srs = { _key: "srs", cards: {}, log: [], newDays: {} }; return store.data.srs; };
@@ -61,12 +61,31 @@
       else if (unlocked(c)) fresh.push(c); else locked++;
     }
     due.sort((a, b) => new Date(st[a.id].due) - new Date(st[b.id].due));
+    if (focusIds) {  // practising one concept: its cards first, due or not (once each)
+      const extra = allCards().filter((c) => focusIds.has(c.id) && !due.includes(c) && st[c.id] && st[c.id].state !== 0);
+      due.unshift(...extra.filter((c) => !(st[c.id].focusDone)));
+    }
     const left = Math.max(0, settings().newPerDay - (srs().newDays[today()] || 0));
     return { due, fresh: fresh.slice(0, left), locked, freshAll: fresh.length };
   }
   LVP.review = {
     dueCount: () => { if (!course || !F) return 0; const q = queue(); return q.due.length + q.fresh.length; },
     struggles: () => allCards().filter((c) => (srs().cards[c.id]?.lapses || 0) > 0).sort((a, b) => srs().cards[b.id].lapses - srs().cards[a.id].lapses).map((c) => plain(c.front || c.cloze).slice(0, 120)),
+    // memory per concept tag: mean FSRS retrievability now (unseen cards count as 0)
+    mastery: () => {
+      if (!F || !fsrs) return [];
+      const st = srs().cards, now = new Date(), tags = {};
+      for (const c of allCards()) for (const t of c.tags || []) {
+        if (/^v\d+\.\d+$/.test(t) || ["video-question", "mine", "definition"].includes(t)) continue;
+        const s = st[c.id];
+        const r = s && s.state !== 0 ? fsrs.get_retrievability(reviveCard(s), now, false) : 0;
+        (tags[t] ||= { tag: t, cards: [], seen: 0, sum: 0 }).cards.push(c.id);
+        tags[t].sum += r; if (s && s.state !== 0) tags[t].seen++;
+      }
+      // only concepts the learner has started; r = recall of the cards learned so far
+      return Object.values(tags).filter((t) => t.cards.length >= 2 && t.seen > 0).map((t) => ({ tag: t.tag, n: t.cards.length, seen: t.seen, r: t.sum / t.seen, cards: t.cards }));
+    },
+    focus: (ids) => { focusIds = new Set(ids); current = null; LVP.selectTab("review"); },
     addCard: (c) => { const id = "m-" + Date.now().toString(36); mine().cards.push({ id, deck: (course.title || "Course") + "::Mine", tags: ["mine"], ...c }); store.set("mine", mine(), true); LVP.updateDue(); },
   };
   LVP.updateDue = () => {
@@ -143,6 +162,7 @@
     st.cards[c.id] = { ...res.card, due: res.card.due.toISOString(), last_review: res.card.last_review ? new Date(res.card.last_review).toISOString() : now.toISOString() };
     if (wasNew) st.newDays[today()] = (st.newDays[today()] || 0) + 1;
     st.log.push({ id: c.id, g: grade, at: now.toISOString(), sent: false });
+    if (focusIds?.has(c.id)) { focusIds.delete(c.id); if (!focusIds.size) focusIds = null; }
     if (st.log.length > 3000) st.log = st.log.slice(-3000);
     store.set("srs", st);
     current = null; revealed = false;

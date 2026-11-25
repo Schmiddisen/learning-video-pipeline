@@ -42,7 +42,16 @@ const STR = {
     todayTitle: "Today", continueAt: "Continue", dueCards: "cards due for review", weak: "Moments to revisit",
     explainTodo: "Explain back what you watched", allVideos: "All videos", labTodo: "Try the lab for",
     noTodo: "All caught up. Pick the next video or ask Claude for a challenge.",
-    examBtn: "Exam practice", coach: "From your coach", sure: "I'm sure", unsure: "Not sure", guessing: "Guessing"
+    examBtn: "Exam practice", coach: "From your coach", sure: "I'm sure", unsure: "Not sure", guessing: "Guessing",
+    tour: [
+      "The video stops at its questions – answer, say how sure you are, and Claude checks it.",
+      "Mark: circle anything on the picture, then ask about it.",
+      "New question: a fresh practice question about the part you are in.",
+      "Review: flashcards unlock once you have watched the moment that teaches them.",
+      "Lab: a hands-on task for the current part, with checks and hints.",
+      "Today: what to do next, your weak spots and exam practice.",
+    ],
+    concepts: "How well you remember each concept", cardsSeen: "cards learned", practiseConcept: "Practise this concept now"
   },
   de: {
     kicker: "Kurs", tabs: { ask: "Fragen", map: "Video", review: "Wiederholen", lab: "Labor", course: "Heute" },
@@ -83,7 +92,16 @@ const STR = {
     todayTitle: "Heute", continueAt: "Weiter mit", dueCards: "Karten fällig", weak: "Stellen zum Nachholen",
     explainTodo: "Erklär zurück, was du gesehen hast", allVideos: "Alle Videos", labTodo: "Probier das Labor zu",
     noTodo: "Alles erledigt. Nimm dir das nächste Video vor oder lass dir von Claude eine Herausforderung geben.",
-    examBtn: "Klausurtraining", coach: "Von deinem Coach", sure: "Sicher", unsure: "Unsicher", guessing: "Geraten"
+    examBtn: "Klausurtraining", coach: "Von deinem Coach", sure: "Sicher", unsure: "Unsicher", guessing: "Geraten",
+    tour: [
+      "Das Video hält bei seinen Fragen an – antworte, sag wie sicher du bist, und Claude prüft.",
+      "Markieren: etwas im Bild einkreisen und dazu fragen.",
+      "Neue Frage: eine frische Übungsfrage zum aktuellen Abschnitt.",
+      "Wiederholen: Karteikarten werden frei, sobald du die Stelle gesehen hast, die sie erklärt.",
+      "Labor: eine praktische Aufgabe zum aktuellen Abschnitt, mit Prüfungen und Hinweisen.",
+      "Heute: was als Nächstes dran ist, deine Schwachstellen und Klausurtraining.",
+    ],
+    concepts: "Wie gut du jedes Konzept behältst", cardsSeen: "Karten gelernt", practiseConcept: "Dieses Konzept jetzt üben"
   }
 };
 
@@ -396,7 +414,11 @@ $("with-frame").onchange = updateCtxLine;
 function renderChat() {
   const box = $("chat"); box.textContent = "";
   const turns = chats[cur?.id] || [];
-  if (!turns.length) { const e = el("div", "empty"); e.append(el("b", null, LVP.L.emptyTitle), el("span", null, sampleChecked && !sample ? LVP.L.unavailable : LVP.L.emptyBody)); box.append(e); }
+  if (!turns.length) {
+    const e = el("div", "empty"); e.append(el("b", null, LVP.L.emptyTitle), el("span", null, sampleChecked && !sample ? LVP.L.unavailable : LVP.L.emptyBody));
+    const ul = el("ul", "list-plain"); for (const tip of LVP.L.tour) ul.append(el("li", null, tip)); e.append(ul);
+    box.append(e);
+  }
   for (const m of turns) box.append(m.node);
   box.scrollTop = box.scrollHeight;
 }
@@ -711,6 +733,16 @@ LVP.panels.course = () => {
       const b = el("button", "item"); b.append(el("span", "mono", fmt(w.a.rewatch)));
       const body = el("span"); body.append(el("strong", null, videoLabel(w.v)), el("span", "sub", w.k.split(":").slice(1).join(":")));
       b.append(body); b.onclick = () => LVP.seek(w.v.id, w.a.rewatch); box.append(b);
+    }
+  }
+  const mastery = (LVP.review?.mastery?.() || []).sort((a, b) => a.r - b.r);
+  if (mastery.length) {
+    box.append(el("p", "section-title", L.concepts));
+    for (const m of mastery.slice(0, 12)) {
+      const b = el("button", "item vid");
+      const left = el("span"); left.append(el("strong", null, m.tag.replace(/[-_]/g, " ")), el("span", "sub", `${Math.round(m.r * 100)} % · ${m.seen}/${m.n} ${L.cardsSeen}`));
+      const bar = el("span", "bar"); const fill = el("i"); fill.style.width = Math.round(m.r * 100) + "%"; bar.append(fill);
+      b.append(left, bar); b.title = L.practiseConcept; b.onclick = () => LVP.review.focus(m.cards); box.append(b);
     }
   }
   box.append(el("p", "section-title", L.allVideos));
