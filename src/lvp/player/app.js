@@ -51,6 +51,7 @@ const STR = {
       "Lab: a hands-on task for the current part, with checks and hints.",
       "Today: what to do next, your weak spots and exam practice.",
     ],
+    session: "Start a study session", sessionNext: "Reviews done – on to the video",
     concepts: "How well you remember each concept", cardsSeen: "cards learned", practiseConcept: "Practise this concept now"
   },
   de: {
@@ -101,6 +102,7 @@ const STR = {
       "Labor: eine praktische Aufgabe zum aktuellen Abschnitt, mit Prüfungen und Hinweisen.",
       "Heute: was als Nächstes dran ist, deine Schwachstellen und Klausurtraining.",
     ],
+    session: "Lerneinheit starten", sessionNext: "Wiederholung erledigt – weiter zum Video",
     concepts: "Wie gut du jedes Konzept behältst", cardsSeen: "Karten gelernt", practiseConcept: "Dieses Konzept jetzt üben"
   }
 };
@@ -114,7 +116,7 @@ const parseTs = (s) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(s || "").tr
 const LVP = (window.LVP = { STR, L: STR.en, $, el, fmt, safeId, parseTs, panels: {}, hooks: { open: [], tick: [], ready: [] } });
 const video = $("video"), ink = $("ink"), stage = $("stage");
 let course = null, cur = null, curIndex = 0;
-let sample = null, sampleChecked = false, imagesOk = false;
+let sample = null, sampleChecked = false, imagesOk = false, toolsOk = false;
 const chats = {};
 let strokes = [], drawing = false, lastT = 0, activeLine = -1, cardBusy = null, askCtl = null, socratic = false;
 
@@ -376,7 +378,8 @@ function rules() {
     "- Reply in the language the learner writes in. Plain text, short paragraphs, formulas in Unicode; no Markdown headings or tables.",
     "- If the video contains a mistake, say so plainly and give the correct version.",
     socratic ? "- SOCRATIC MODE: do not give the answer. Ask one short guiding question that gets them one step closer, building on what they said. Only confirm when they have it." : "",
-    "", "Videos in this course:", course.videos.map((v) => "- " + videoLabel(v)).join("\n"),
+    "", "Videos in this course (id – title):", course.videos.map((v) => `- ${v.id} – ${videoLabel(v)}`).join("\n"),
+    toolsOk ? "Moments in another video: write them as [video-id m:ss]. Use the narration tool to look them up." : "",
     "", learnerContext(), "", `Full narration of "${videoLabel(cur)}":`, transcriptText(0, cur.duration, 60000),
   ].filter((x) => x !== "").join("\n");
 }
@@ -393,11 +396,15 @@ function moment(t) {
 }
 function renderRich(node, text, videoId = cur?.id) {
   node.textContent = "";
-  const re = /\[(\d{1,2}):(\d{2})\]/g; let last = 0, m;
+  const re = /\[(?:([A-Za-z0-9_-]+)\s+)?(\d{1,2}):(\d{2})\]/g; let last = 0, m;
   while ((m = re.exec(text))) {
+    const other = m[1] && course?.videos.find((v) => v.id === m[1]);
+    if (m[1] && !other) continue;
     node.append(document.createTextNode(text.slice(last, m.index)));
-    const s = Number(m[1]) * 60 + Number(m[2]);
-    const b = el("button", "ts", `${m[1]}:${m[2]}`); b.onclick = () => LVP.seek(videoId, s);
+    const s = Number(m[2]) * 60 + Number(m[3]);
+    const target = other ? other.id : videoId;
+    const b = el("button", "ts", (other ? videoLabel(other).split(/\s[–-]\s/)[0] + " " : "") + `${m[2]}:${m[3]}`);
+    b.onclick = () => LVP.seek(target, s);
     node.append(b); last = re.lastIndex;
   }
   node.append(document.createTextNode(text.slice(last)));
@@ -439,8 +446,17 @@ async function ask(question) {
   $("ask-input").value = ""; $("ask-send").disabled = true; $("ask-stop").hidden = false;
   askCtl = new AbortController();
   const history = turns.slice(0, -1).filter((x) => x.content).slice(-9).map((x) => ({ role: x.role, content: x.content }));
+  const opts = { signal: askCtl.signal, images: blob ? [blob] : undefined, onText: ({ text }) => { renderRich(body, text); $("chat").scrollTop = $("chat").scrollHeight; } };
+  if (toolsOk && course.videos.length > 1) {
+    opts.tools = [{
+      name: "narration",
+      description: "Full narration (with [m:ss] timestamps) of another video of this course. Use it when the question involves something taught in a different video, so you can answer precisely and point to the moment there.",
+      inputSchema: { type: "object", properties: { video: { type: "string", description: "video id from the course list" } }, required: ["video"] },
+      execute: (input) => { const v = course.videos.find((x) => x.id === String(input.video)); if (!v) throw new Error("unknown video id; ids: " + course.videos.map((x) => x.id).join(", ")); return transcriptText(0, v.duration, 24000, v); },
+    }];
+  } else opts.cache = false;
   try {
-    const r = await sample([{ role: "user", content: rules() }, ...history], { cache: false, signal: askCtl.signal, images: blob ? [blob] : undefined, onText: ({ text }) => { renderRich(body, text); $("chat").scrollTop = $("chat").scrollHeight; } });
+    const r = await sample([{ role: "user", content: rules() }, ...history], opts);
     entry.content = r.text; renderRich(body, r.text);
     const acts = el("div", "acts");
     const n = el("button", "btn small", LVP.L.saveNote); n.onclick = () => { addNote(t, r.text.slice(0, 600)); n.disabled = true; n.textContent = LVP.L.saved; };
@@ -613,6 +629,11 @@ function renderExplain(res) {
   return box;
 }
 LVP.openExplain = openExplain;
+LVP.continueSession = () => {
+  const id = LVP.session?.next; LVP.session = null; if (!id) return;
+  openVideo(id); selectTab("ask");
+  setTimeout(() => video.play().catch(() => {}), 600);
+};
 
 /* ---------- notes ---------- */
 function addNote(t, text) { prog().notes.push({ t, text, at: Date.now() }); prog().notes.sort((a, b) => a.t - b.t); saveProg(cur.id, true); buildMarks(); LVP.refreshPanels?.(); }
@@ -726,7 +747,14 @@ LVP.panels.course = () => {
   for (const v of course.videos) for (const [k, a] of Object.entries(Store.get("p-" + v.id)?.answers || {})) if (a.verdict && a.verdict !== "right" && a.rewatch != null) weak.push({ v, k, a });
   if (n === 0 && !weak.length) todo.append(el("p", "hint", L.noTodo));
   box.append(todo);
-  if (LVP.exam && sample) { const ex = el("button", "btn", L.examBtn); ex.onclick = () => LVP.exam.open(); box.append(rowOf(ex)); }
+  const startS = el("button", "btn primary", L.session);
+  startS.onclick = () => {
+    LVP.session = { next: resume || course.videos[0].id };
+    if ((LVP.review?.dueCount?.() || 0) > 0) selectTab("review"); else LVP.continueSession();
+  };
+  const acts = rowOf(startS);
+  if (LVP.exam && sample) { const ex = el("button", "btn", L.examBtn); ex.onclick = () => LVP.exam.open(); acts.append(ex); }
+  box.append(acts);
   if (weak.length) {
     box.append(el("p", "section-title", L.weak));
     for (const w of weak.slice(-6).reverse()) {
@@ -814,7 +842,7 @@ async function boot() {
   window.addEventListener("pagehide", () => { if (cur) { prog().pos = video.currentTime; Store.push("p-" + cur.id); } });
   use("sample").then(async (s) => {
     sample = s; sampleChecked = true;
-    if (s) { const lim = await s.limits().catch(() => null); imagesOk = !!lim?.images; }
+    if (s) { const lim = await s.limits().catch(() => null); imagesOk = !!lim?.images; toolsOk = !!lim?.tools; }
     $("with-frame").parentElement.hidden = !imagesOk;
     for (const id of ["practice-btn"]) $(id).hidden = !s;
     updateCtxLine(); renderChat();

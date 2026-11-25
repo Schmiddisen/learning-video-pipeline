@@ -121,6 +121,7 @@
       const d = el("div", "empty"); d.append(el("b", null, T.done), el("span", null, T.doneBody));
       const next = Object.values(st.cards).map((x) => new Date(x.due).getTime()).filter((t) => t > Date.now()).sort((a, b) => a - b)[0];
       if (next) d.append(el("span", null, `${T.nextIn}: ${new Date(next).toLocaleString()}`));
+      if (LVP.session) { const go = el("button", "btn primary", LVP.L.sessionNext); go.onclick = () => LVP.continueSession(); d.append(go); }
       box.append(d);
     } else {
       const c = current, f = el("div", "flash");
