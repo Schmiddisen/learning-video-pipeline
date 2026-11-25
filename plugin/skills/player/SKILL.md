@@ -12,7 +12,7 @@ uv run lvp-player --clean                 # all built videos → build/player/
 uv run lvp-player --only-data             # after changing cards/labs/learner.md: data + page only
 ```
 Writes `build/player/`: `index.html`, `app.js`, `review.js`, `labs.js`, `exam.js`,
-`lab-worker.js` (the page), `course.json` (timeline per video, cards linked to their moment,
+`lab-worker.js`, `fsrs.js` (the page; ts-fsrs is bundled, MIT), `course.json` (timeline per video, cards linked to their moment,
 authored labs, the learner profile), `videos/*.mp4` (≤ 14 MB each) and `pyodide/` (Python
 for the labs, downloaded once; `--no-python` for JavaScript-only labs). Older builds work
 too: text, word timings and question times are reconstructed.
@@ -20,7 +20,7 @@ too: text, word timings and question times are reconstructed.
 ## 2. Publish as an artifact
 Load the `artifact-capabilities` skill first. Publish `build/player/index.html` with:
 - `files`: every other file in `build/player/` at its relative path (`course.json`,
-  `app.js`, `review.js`, `labs.js`, `exam.js`, `lab-worker.js`, `pyodide/<each file>`,
+  `app.js`, `review.js`, `labs.js`, `exam.js`, `lab-worker.js`, `fsrs.js`, `pyodide/<each file>`,
   `videos/<id>.mp4`)
 - `capabilities`: `{"sample": {"images": true}, "db": {}, "user": {}, "dictation": {}, "desktop": {}}`
 - `icon`: `"video"`, a one-sentence `description`.
