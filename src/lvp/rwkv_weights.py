@@ -85,7 +85,7 @@ def _read_pth(path: Path) -> tuple[list[dict], bytes]:
 
 
 def ensure(dst: Path) -> bool:
-    """Write rwkv_weights.wasm (raw float32) and rwkv_weights.json into dst. Returns False if offline."""
+    """Write rwkv_weights.wasm (raw float32) and rwkv_weights.json into dst; False if offline."""
     # raw float32, named .wasm: artifact hosting serves no .bin (fetched as an ArrayBuffer anyway)
     bin_path, man_path = dst / "rwkv_weights.wasm", dst / "rwkv_weights.json"
     cache_bin, cache_man = CACHE / "rwkv_weights.bin", CACHE / "rwkv_weights.json"

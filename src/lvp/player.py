@@ -143,7 +143,7 @@ def _estimated_quizzes(scene: Path, name: str, t0: float, end: float) -> list[di
     return sorted(out, key=lambda q: q["t"])
 
 
-def export_video(scene: Path, quality: str | None, max_mb: float) -> dict | None:
+def export_video(scene: Path, quality: str | None, max_mb: float, dest: Path = OUT) -> dict | None:
     from lvp.build import sections
 
     plan = _plan_dir(scene, quality)
@@ -219,8 +219,8 @@ def export_video(scene: Path, quality: str | None, max_mb: float) -> dict | None
         t0 += end
     info["duration"] = round(_probe(video), 2)
     info["file"] = f"videos/{vid}.mp4"
-    _encode(video, OUT / info["file"], info["duration"], max_mb)
-    mb = (OUT / info["file"]).stat().st_size / 1e6
+    _encode(video, dest / info["file"], info["duration"], max_mb)
+    mb = (dest / info["file"]).stat().st_size / 1e6
     print(f"[✓] {vid}: {len(info['lines'])} lines, {len(info['quizzes'])} questions, "
           f"{len(info['screens'])} screen states, {mb:.1f} MB")  # fmt: skip
     return info
@@ -344,6 +344,22 @@ def _encode(src: Path, dst: Path, duration: float, max_mb: float) -> None:
                     "-bufsize", f"{kbps * 4}k", str(dst)], check=True)  # fmt: skip
 
 
+def _merge_library(src: Path, slug: str, title: str, language: str) -> None:
+    """library.json: the courses one player holds. Entries of other courses are kept."""
+    lib = {"format": 1, "courses": []}
+    if src.exists():
+        lib = json.loads(src.read_text(encoding="utf-8"))
+    courses = [c for c in lib.get("courses", []) if c.get("slug") != slug]
+    path = f"courses/{slug}/" if slug else ""
+    courses.append({"slug": slug, "title": title, "language": language, "path": path})
+    courses.sort(key=lambda c: (c["slug"] != "", c.get("title", "").lower()))
+    lib["courses"] = courses
+    (OUT / "library.json").write_text(
+        json.dumps(lib, ensure_ascii=False, indent=1), encoding="utf-8"
+    )
+    print(f"[✓] {OUT / 'library.json'}: {', '.join(c.get('title') or c['slug'] for c in courses)}")
+
+
 def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -356,6 +372,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--cards", type=Path, help="flashcard folder (default: cards/)")
     ap.add_argument("--labs", type=Path, help="authored labs folder (default: labs/)")
     ap.add_argument("--no-python", action="store_true", help="skip Pyodide (labs: JavaScript)")
+    ap.add_argument("--slug", help="add this course to a player library under courses/<slug>/ "
+                    "(one player for many courses; default: the course at the root)")  # fmt: skip
+    ap.add_argument("--library", type=Path,
+                    help="library.json of the published player to merge into")  # fmt: skip
     ap.add_argument("--no-rwkv", action="store_true", help="skip the RWKV memory model (~11 MB)")
     ap.add_argument("--only-data", action="store_true",
                     help="rewrite course.json and the page only (videos exported)")  # fmt: skip
@@ -365,11 +385,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.clean and OUT.exists():
         shutil.rmtree(OUT)
     files = [f.resolve() for f in args.files] or sorted(VIDEOS.glob("v*/*.py"))
-    old = OUT / "course.json"
+    if args.slug and not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,40}", args.slug):
+        raise SystemExit("--slug: lowercase letters, digits and '-' only (e.g. attention-paper)")
+    dest = OUT / "courses" / args.slug if args.slug else OUT
+    old = dest / "course.json"
     if args.only_data and old.exists():
         videos = json.loads(old.read_text(encoding="utf-8"))["videos"]
     else:
-        videos = [v for f in files if (v := export_video(f, args.quality, args.max_mb))]
+        videos = [v for f in files if (v := export_video(f, args.quality, args.max_mb, dest))]
     s = settings()
     title = args.title or s.title
     cards = cards_for(args.cards or CARDS, videos) if (args.cards or CARDS).exists() else []
@@ -383,15 +406,17 @@ def main(argv: list[str] | None = None) -> int:
               "cards": cards, "labs": labs, "learner": learner, "python": python,
               "rwkv": rwkv,
               "repo": ROOT.name, "render": _render_command()}  # fmt: skip
-    OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "course.json").write_text(json.dumps(course, ensure_ascii=False), encoding="utf-8")
+    dest.mkdir(parents=True, exist_ok=True)
+    (dest / "course.json").write_text(json.dumps(course, ensure_ascii=False), encoding="utf-8")
+    if args.slug or args.library:
+        _merge_library(args.library or OUT / "library.json", args.slug or "", title, s.language)
     for f in PAGE.iterdir():
         if f.suffix in (".html", ".js"):
             text = f.read_text(encoding="utf-8").replace("__COURSE_TITLE__", html.escape(title))
             (OUT / f.name).write_text(text, encoding="utf-8")
     total = sum(f.stat().st_size for f in OUT.rglob("*") if f.is_file()) / 1e6
     linked = sum("t" in c for c in cards)
-    print(f"[✓] {OUT / 'course.json'}: {len(videos)} videos, {len(cards)} cards "
+    print(f"[✓] {dest / 'course.json'}: {len(videos)} videos, {len(cards)} cards "
           f"({linked} linked to a moment), {total:.0f} MB in total")  # fmt: skip
     return 0
 

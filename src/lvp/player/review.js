@@ -40,8 +40,8 @@
   let T = S.en, course = null, fsrs = null, current = null, revealed = false, focusIds = null, shown = { id: null, at: 0 };
   const F = window.FSRS;
   const store = LVP.store;
-  const srs = () => { const s = store.get("srs"); if (s) { s.cards ||= {}; s.log ||= []; s.newDays ||= {}; return s; } store.data.srs = { _key: "srs", cards: {}, log: [], newDays: {} }; return store.data.srs; };
-  const mine = () => { const m = store.get("mine"); if (m) { m.cards ||= []; return m; } store.data.mine = { _key: "mine", cards: [] }; return store.data.mine; };
+  const srs = () => { const s = store.ensure("srs", () => ({ cards: {}, log: [], newDays: {} })); s.cards ||= {}; s.log ||= []; s.newDays ||= {}; return s; };
+  const mine = () => { const m = store.ensure("mine", () => ({ cards: [] })); m.cards ||= []; return m; };
   const settings = () => store.get("review-settings") || { _key: "review-settings", newPerDay: 20, ankiMode: false };
   const today = () => new Date().toISOString().slice(0, 10);
   // the video's own check questions come back as spaced cards (lag-1 in the video, days later here)
@@ -53,9 +53,9 @@
     });
   };
   // the learner's own Anki notes that Claude linked to a video moment
-  const links = () => { const l = store.get("anki-links"); if (l) { l.notes ||= {}; l.checked ||= []; return l; } store.data["anki-links"] = { _key: "anki-links", notes: {}, checked: [] }; return store.data["anki-links"]; };
+  const links = () => { const l = store.ensure("anki-links", () => ({ notes: {}, checked: [] })); l.notes ||= {}; l.checked ||= []; return l; };
   const linkedCards = () => Object.entries(links().notes).map(([nid, n]) => ({ id: "a-" + nid, deck: n.deck, front: n.front, back: n.back, cloze: n.cloze, extra: n.extra, video: n.video, t: n.t, tags: n.tags || [], anki: true }));
-  const changes = () => { const c = store.get("card-changes"); if (c) { c.edited ||= {}; c.deleted ||= []; return c; } store.data["card-changes"] = { _key: "card-changes", edited: {}, deleted: [] }; return store.data["card-changes"]; };
+  const changes = () => { const c = store.ensure("card-changes", () => ({ edited: {}, deleted: [] })); c.edited ||= {}; c.deleted ||= []; return c; };
   const allCards = () => {
     const ch = changes(), gone = new Set(ch.deleted);
     return [...(course?.cards || []), ...quizCards, ...mine().cards, ...linkedCards()]

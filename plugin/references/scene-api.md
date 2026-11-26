@@ -118,3 +118,5 @@ class S2Formula(LessonScene):
 - `uv run lvp-player` – package builds for the interactive player (the `player` skill). The
   plan each build writes records narration text, word times, on-screen text and question
   times; the question helpers above are what make the player stop and ask.
+  `--slug <name> [--library library.json]` adds the course to an existing player (library);
+  `--no-rwkv`, `--no-python` leave out the RWKV model and Pyodide.

@@ -21,7 +21,7 @@
   };
   let T = S.en, course = null;
   const watched = () => course.videos.filter((v) => (LVP.store.get("p-" + v.id)?.furthest || 0) >= v.duration * 0.9);
-  const exams = () => { const e = LVP.store.get("exams"); if (e) { e.list ||= []; return e; } LVP.store.data.exams = { _key: "exams", list: [] }; return LVP.store.data.exams; };
+  const exams = () => { const e = LVP.store.ensure("exams", () => ({ list: [] })); e.list ||= []; return e; };
 
   function pickVideos(n) {
     // weight: weak answers and long-ago watching first, then the rest – interleaving across parts

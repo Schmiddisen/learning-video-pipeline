@@ -21,6 +21,8 @@ Roughly in order. ✓ = done.
   questions, explain-back, Socratic mode, notes, cards from any moment.
 - ✓ **Flashcards in the player** – FSRS, cards unlock at the moment that teaches them, lapses
   link back to the video; direct AnkiConnect bridge in the desktop app.
+- ✓ **One player for all courses** – a library in one artifact: course switcher, records per
+  course, shared settings; `lvp-player --slug` adds a course from any repository.
 - ✓ **RWKV scheduler in the player** – the RWKV-7 memory model of srs-benchmark ported to
   JavaScript (matches PyTorch to 1e-7), replays the review history (Anki's revlog or the
   player's log) and orders reviews by the chance of forgetting.

@@ -131,18 +131,26 @@ const chats = {};
 let strokes = [], drawing = false, lastT = 0, activeLine = -1, cardBusy = null, askCtl = null, socratic = false;
 
 /* ---------- storage: the learner's account when available, else this browser ---------- */
+/* One player can hold several courses (a library): each course's records live under
+   "<slug>~<key>"; the first course (slug "") and the shared settings keep plain keys. */
+const SHARED_KEYS = new Set(["models", "review-settings"]);
 const Store = (LVP.store = {
-  db: null, uid: null, data: {}, timers: {}, chain: Promise.resolve(),
-  get(key, fallback) { return this.data[key] ?? fallback; },
+  db: null, uid: null, data: {}, timers: {}, chain: Promise.resolve(), ns: "",
+  full(key) { return !this.ns || SHARED_KEYS.has(key) ? key : this.ns + "~" + key; },
+  get(key, fallback) { return this.data[this.full(key)] ?? fallback; },
+  /** the record for key, created from init() when missing (not saved until set) */
+  ensure(key, init) { const f = this.full(key); if (!this.data[f]) this.data[f] = { ...init(), _key: f }; return this.data[f]; },
   set(key, value, now = false) {
-    value.updated = Date.now(); value._key = key; this.data[key] = value;
-    try { localStorage.setItem("lvp:" + key, JSON.stringify(value)); } catch { /* private mode */ }
-    clearTimeout(this.timers[key]);
-    this.timers[key] = setTimeout(() => this.push(key), now ? 0 : 3000);
+    const f = this.full(key);
+    value.updated = Date.now(); value._key = f; this.data[f] = value;
+    try { localStorage.setItem("lvp:" + f, JSON.stringify(value)); } catch { /* private mode */ }
+    clearTimeout(this.timers[f]);
+    this.timers[f] = setTimeout(() => this.pushFull(f), now ? 0 : 3000);
   },
-  push(key) {
+  push(key) { this.pushFull(this.full(key)); },
+  pushFull(key) {
     if (!this.db || !this.uid) return;
-    const value = this.data[key];
+    const value = this.data[key]; if (!value) return;
     this.chain = this.chain.then(() => this.db.collection("data/users/" + this.uid).doc(safeId(key)).set(JSON.parse(JSON.stringify(value)))).catch(() => {});
   },
   loadLocal() {
@@ -161,17 +169,17 @@ const Store = (LVP.store = {
         const v = d.data() || {}; const key = v._key || d.id;
         const mine = this.data[key];
         if (!mine || (v.updated || 0) > (mine.updated || 0)) { this.data[key] = v; try { localStorage.setItem("lvp:" + key, JSON.stringify(v)); } catch { /* */ } }
-        else if ((mine.updated || 0) > (v.updated || 0)) this.push(key);
+        else if ((mine.updated || 0) > (v.updated || 0)) this.pushFull(key);
       }
-      for (const key of Object.keys(this.data)) if (!snap.docs.some((d) => (d.data()?._key || d.id) === key)) this.push(key);
+      for (const key of Object.keys(this.data)) if (!snap.docs.some((d) => (d.data()?._key || d.id) === key)) this.pushFull(key);
       return true;
     } catch { return false; }
   },
 });
 const prog = (id = cur?.id) => {
   const key = "p-" + id;
-  if (!Store.data[key]) Store.data[key] = { _key: key, pos: 0, furthest: 0, answers: {}, notes: [] };
-  const p = Store.data[key]; p._key = key; p.answers ||= {}; p.notes ||= []; return p;
+  const p = Store.ensure(key, () => ({ pos: 0, furthest: 0, answers: {}, notes: [] }));
+  p.answers ||= {}; p.notes ||= []; return p;
 };
 const saveProg = (id = cur?.id, now = false) => Store.set("p-" + id, prog(id), now);
 LVP.prog = prog; LVP.saveProg = saveProg;
@@ -883,12 +891,43 @@ function applyStrings() {
 }
 const use = (n) => (window.claude?.use ? window.claude.use(n).catch(() => null) : Promise.resolve(null));
 LVP.use = use;
+/* The library: library.json lists the courses of this player ({slug, title, language, path});
+   the course at the root (course.json next to the page) is always part of it. */
+async function loadLibrary() {
+  const lib = await fetch("library.json").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const courses = (lib?.courses || []).filter((c) => c && typeof c.slug === "string");
+  if (!courses.some((c) => c.slug === "")) {
+    const root = await fetch("course.json", { method: "HEAD" }).then((r) => r.ok).catch(() => false);
+    if (root || !courses.length) courses.unshift({ slug: "", title: lib?.rootTitle || "", path: "" });
+  }
+  let chosen = null;
+  try { chosen = localStorage.getItem("lvp-course"); } catch { /* */ }
+  return { courses, entry: courses.find((c) => c.slug === chosen) || courses[0] };
+}
+async function buildCourseSwitch(lib) {
+  const sel = $("course-switch"); if (!sel || lib.courses.length < 2) return;
+  for (const c of lib.courses) {   // an entry without a title (the root course of an older player): read it
+    if (!c.title) c.title = await fetch((c.path || "") + "course.json").then((r) => r.json()).then((x) => x.title).catch(() => c.slug || "Course");
+    const o = el("option", null, c.title); o.value = c.slug; sel.append(o);
+  }
+  sel.value = lib.entry.slug; sel.hidden = false;
+  sel.onchange = () => {
+    try { localStorage.setItem("lvp-course", sel.value); } catch { /* */ }
+    if (cur) { const p = prog(); p.pos = video.currentTime; Store.set("p-" + cur.id, p, true); }
+    setTimeout(() => { location.hash = ""; location.reload(); }, 300);
+  };
+}
 async function boot() {
-  try { const r = await fetch("course.json"); if (!r.ok) throw new Error(String(r.status)); course = await r.json(); }
+  const lib = await loadLibrary(), base = lib.entry.path || (lib.entry.slug ? `courses/${lib.entry.slug}/` : "");
+  try { const r = await fetch(base + "course.json"); if (!r.ok) throw new Error(String(r.status)); course = await r.json(); }
   catch { $("chat").append(el("div", "err", STR.en.loadError)); return; }
+  Store.ns = lib.entry.slug; course.slug = lib.entry.slug; course.base = base;
+  for (const v of course.videos) if (v.file && !/^(https?:|blob:|data:|\/)/.test(v.file)) v.file = base + v.file;
   LVP.L = STR[(course.language || "en").slice(0, 2)] || STR.en;
   document.documentElement.lang = course.language || "en";
-  $("course-title").textContent = course.title;
+  $("course-title").textContent = course.title; document.title = course.title;
+  if (!lib.entry.title) lib.entry.title = course.title;
+  buildCourseSwitch(lib);
   applyStrings(); buildPicker(); Store.loadLocal();
   for (const f of LVP.hooks.ready) f(course);
   const fromHash = course.videos.find((v) => safeId(v.id) === location.hash.slice(1))?.id;

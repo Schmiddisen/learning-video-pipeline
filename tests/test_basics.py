@@ -175,3 +175,21 @@ def test_rwkv_js_is_valid_and_exports():
     code = f"console.log(Object.keys(require({str(js)!r})).join(','))"
     out = subprocess.run([node, "-e", code], capture_output=True, text=True, check=True)
     assert out.stdout.strip() == "Model,Process,Memory,hashCode"
+
+
+def test_library_merge_keeps_other_courses(tmp_path, monkeypatch):
+    import json
+
+    from lvp import player
+
+    monkeypatch.setattr(player, "OUT", tmp_path)
+    src = tmp_path / "old.json"
+    src.write_text(json.dumps({"format": 1, "courses": [
+        {"slug": "", "title": "Krypto", "path": ""},
+        {"slug": "paper", "title": "Old title", "path": "courses/paper/"}]}))  # fmt: skip
+    player._merge_library(src, "paper", "Attention", "en")
+    player._merge_library(tmp_path / "library.json", "bayes", "Bayes", "en")
+    lib = json.loads((tmp_path / "library.json").read_text())
+    assert [(c["slug"], c["title"]) for c in lib["courses"]] == [
+        ("", "Krypto"), ("paper", "Attention"), ("bayes", "Bayes")]  # fmt: skip
+    assert lib["courses"][1]["path"] == "courses/paper/"

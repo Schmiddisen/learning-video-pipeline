@@ -68,6 +68,8 @@ h2.h { font: 700 16px/1.25 var(--f-display); margin: 0; }
 header.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin: 0 0 12px; }
 .brand { font: 700 20px/1.1 var(--f-display); letter-spacing: -0.01em; margin: 0; }
 .brand small { display: block; font: 600 11px/1.4 var(--f-body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+#course-switch { display: block; margin-top: 4px; max-width: 260px; font: 600 12px/1.3 var(--f-body); color: var(--muted); background: transparent; border: 1px solid var(--line, #ccc); border-radius: 6px; padding: 2px 4px; }
+#course-switch[hidden] { display: none; }
 .picker { flex: 1 1 320px; min-width: 0; display: flex; gap: 6px; align-items: center; }
 .picker select { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 .iconbtn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 7px 10px; line-height: 1; }
@@ -209,7 +211,8 @@ aside { background: var(--surface); border: 1px solid var(--line); border-radius
 </style>
 
 <header class="top">
-  <p class="brand"><small id="s-kicker">Course</small><span id="course-title">__COURSE_TITLE__</span></p>
+  <p class="brand"><small id="s-kicker">Course</small><span id="course-title">__COURSE_TITLE__</span>
+    <select id="course-switch" hidden aria-label="Course"></select></p>
   <div class="picker">
     <button class="iconbtn" id="prev" aria-label="Previous video">&#8592;</button>
     <select id="video-select" aria-label="Video"></select>
