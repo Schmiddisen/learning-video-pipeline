@@ -741,7 +741,7 @@ class S4Outro(LessonScene):
                 "A card's stability doubles after a review.\n"
                 "Same desired retention – what happens to its next interval?",
                 "A friend sets desired retention to 99 %.\n"
-                "What happens to her workload, and why so much?",
+                "What happens to their workload, and why so much?",
                 "Name two things that could change your recall\n"
                 "of a card today that FSRS never sees.",
             ]

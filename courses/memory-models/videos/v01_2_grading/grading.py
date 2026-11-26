@@ -82,7 +82,7 @@ class S0Hook(LessonScene):
         self.clear_stage()
         row = ada_row().move_to(UP * 0.4)
         with self.voiceover(
-            'Now meet <bookmark mark="a"/>a fortune teller who says ninety percent. '
+            'Now meet <bookmark mark="a"/>Ada, a fortune teller who says ninety percent. '
             '<bookmark mark="e"/>For every card, every day.',
             hold="step",
         ):
@@ -766,8 +766,8 @@ class S5Outro(LessonScene):
         self.clear_stage()
         self.recall(
             [
-                "A model says 80 % and you forget the card.\n"
-                "What does that review add to the log loss?",
+                "A model has AUC 0.85 but a worse log loss than AVG.\n"
+                "Would you let it set intervals? Order today's cards?",
                 "HLR: worse log loss than AVG, but a higher AUC.\nWhat is each of them better at?",
                 "Why must each user's test reviews\nbe newer than their training reviews?",
             ]

@@ -18,3 +18,13 @@ max_usd_per_run = 1.50    # the OpenRouter key itself is capped at $2 for this c
 
 [pronunciation]
 # respellings for the voice only, e.g.  SQL = "sequel"   "e.g." = "for example"
+FSRS = "F S R S"
+"FSRS-4.5" = "F S R S four point five"
+"FSRS-5" = "F S R S five"
+"FSRS-6" = "F S R S six"
+"FSRS-7" = "F S R S seven"
+RWKV = "R W K V"
+"RWKV-P" = "R W K V P"
+RWKV4Anki = "R W K V for Anki"
+AVG = "A V G"
+"KV cache" = "K V cache"

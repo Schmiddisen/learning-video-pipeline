@@ -828,8 +828,8 @@ class S4CurveInstant(LessonScene):
         )
         with self.voiceover(
             "On the leaderboard from Video 1.2, the narrow question wins by far: "
-            '<bookmark mark="a"/>Instant at zero point two seven seven, <bookmark mark="b"/>Curve at '
-            'zero point three one nine, <bookmark mark="c"/>FSRS-7 at zero point three four zero.',
+            '<bookmark mark="a"/>Instant first, <bookmark mark="b"/>Curve second, '
+            '<bookmark mark="c"/>FSRS-7 behind both.',
             hold="insight",
         ):
             self.play(FadeIn(cap), run_time=0.5)
@@ -837,9 +837,9 @@ class S4CurveInstant(LessonScene):
             self.at("b", FadeIn(bars[1]), run_time=0.5)
             self.at("c", FadeIn(bars[2]), run_time=0.5)
         self.checkpoint(
-            "Two learners have the same history on one card,\nbut one has done 400 other reviews today.\n"
-            "Can FSRS tell them apart? Can RWKV?",
-            "FSRS: no – it sees only that card. RWKV: yes – it sees today's load.",
+            "Your friend's collection is loaded into RWKV,\nand into FSRS with Optimize.\n"
+            "What changes inside each model?",
+            "RWKV: only its state (their history replayed); the weights stay fixed. FSRS: its parameters are refitted.",
         )
 
 
