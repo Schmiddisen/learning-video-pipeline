@@ -108,3 +108,70 @@ def test_player_links_cards_and_labs_to_videos(tmp_path):
     assert card["video"] == "v02_2_odds" and card["t"] == 12.0
     (tmp_path / "l.yaml").write_text("labs:\n  - video: v2.1\n    title: T\n", encoding="utf-8")
     assert labs_for(tmp_path, videos)[0]["video"] == "v02_1_intro"
+
+
+def test_rwkv_checkpoint_conversion_without_torch(tmp_path, monkeypatch):
+    """A .pth is a zip with a pickle + raw float32 storages; read it like torch.save writes it."""
+    import collections
+    import io
+    import pickle
+    import struct
+    import types
+    import zipfile
+
+    from lvp import rwkv_weights
+
+    torch = types.ModuleType("torch")
+    utils = types.ModuleType("torch._utils")
+
+    class FloatStorage:
+        pass
+
+    def _rebuild_tensor_v2(*a):
+        return a
+
+    FloatStorage.__module__, FloatStorage.__qualname__ = "torch", "FloatStorage"
+    _rebuild_tensor_v2.__module__ = "torch._utils"
+    _rebuild_tensor_v2.__qualname__ = "_rebuild_tensor_v2"
+    torch.FloatStorage, utils._rebuild_tensor_v2 = FloatStorage, _rebuild_tensor_v2
+    monkeypatch.setitem(sys.modules, "torch", torch)
+    monkeypatch.setitem(sys.modules, "torch._utils", utils)
+
+    class T:
+        def __init__(self, key, offset, shape, stride):
+            self.args = (key, offset, shape, stride)
+
+        def __reduce__(self):
+            key, offset, shape, stride = self.args
+            return (_rebuild_tensor_v2, (("storage", FloatStorage, key, "cpu", 6), offset, shape,
+                                         stride, False, collections.OrderedDict()))  # fmt: skip
+
+    class P(pickle.Pickler):
+        def persistent_id(self, obj):
+            return obj if isinstance(obj, tuple) and obj and obj[0] == "storage" else None
+
+    state = collections.OrderedDict(a=T("0", 0, (2, 2), (2, 1)), b=T("0", 4, (2,), (1,)))
+    buf = io.BytesIO()
+    P(buf, protocol=2).dump(state)
+    pth = tmp_path / "m.pth"
+    with zipfile.ZipFile(pth, "w") as z:
+        z.writestr("m/data.pkl", buf.getvalue())
+        z.writestr("m/data/0", struct.pack("<6f", 1, 2, 3, 4, 5, 6))
+    manifest, blob = rwkv_weights._read_pth(pth)
+    got = [(m["name"], m["shape"], m["offset"]) for m in manifest]
+    assert got == [("a", [2, 2], 0), ("b", [2], 4)]
+    assert struct.unpack("<6f", blob) == (1, 2, 3, 4, 5, 6)
+
+
+def test_rwkv_js_is_valid_and_exports():
+    import shutil
+
+    import pytest
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not installed")
+    js = ROOT / "src/lvp/player/rwkv.js"
+    code = f"console.log(Object.keys(require({str(js)!r})).join(','))"
+    out = subprocess.run([node, "-e", code], capture_output=True, text=True, check=True)
+    assert out.stdout.strip() == "Model,Process,Memory,hashCode"

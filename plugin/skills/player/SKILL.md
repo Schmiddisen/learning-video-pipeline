@@ -14,14 +14,18 @@ uv run lvp-player --only-data             # after changing cards/labs/learner.md
 Writes `build/player/`: `index.html`, `app.js`, `review.js`, `labs.js`, `exam.js`,
 `lab-worker.js`, `fsrs.js` (the page; ts-fsrs is bundled, MIT), `course.json` (timeline per video, cards linked to their moment,
 authored labs, the learner profile), `videos/*.mp4` (≤ 14 MB each) and `pyodide/` (Python
-for the labs, downloaded once; `--no-python` for JavaScript-only labs). Older builds work
-too: text, word timings and question times are reconstructed.
+for the labs, downloaded once; `--no-python` for JavaScript-only labs), `rwkv.js`,
+`rwkv-worker.js` and `rwkv_weights.wasm` (raw float32) + `rwkv_weights.json` (the RWKV memory model of
+open-spaced-repetition/srs-benchmark, downloaded once and converted without torch, ~11 MB;
+`--no-rwkv` to leave it out). Older builds work too: text, word timings and question times
+are reconstructed.
 
 ## 2. Publish as an artifact
 Load the `artifact-capabilities` skill first. Publish `build/player/index.html` with:
 - `files`: every other file in `build/player/` at its relative path (`course.json`,
-  `app.js`, `review.js`, `labs.js`, `exam.js`, `lab-worker.js`, `fsrs.js`, `pyodide/<each file>`,
-  `videos/<id>.mp4`)
+  `app.js`, `review.js`, `labs.js`, `exam.js`, `lab-worker.js`, `fsrs.js`, `rwkv.js`,
+  `rwkv-worker.js`, `rwkv_weights.wasm`,
+  `rwkv_weights.json`, `pyodide/<each file>`, `videos/<id>.mp4`)
 - `capabilities`: `{"sample": {"images": true}, "db": {}, "user": {}, "dictation": {}, "desktop": {}}`
 - `icon`: `"video"`, a one-sentence `description`.
 
@@ -38,6 +42,9 @@ learner opens it). Tell the user:
   app), keep Anki open with AnkiConnect (add-on 2055492159), open Review → Connect to Anki.
   It matches the course's notes, sends reviews, can follow Anki's schedule, add missing
   cards and sync AnkiWeb (so AnkiDroid stays in step). Without it, review runs in the player;
+- **Scheduler** (Review → settings): FSRS, or RWKV – a neural memory model that replays the
+  whole review history (Anki's review log when Anki's decks are on) in a worker and shows the
+  cards most at risk first, at a chosen target recall; answers still go to Anki;
   pending reviews go to Anki the next time it connects.
 - dictation works on desktop Chromium and the desktop app.
 

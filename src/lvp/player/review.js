@@ -10,7 +10,7 @@
       why: "Why? Ask Claude", done: "Done for now.", doneBody: "New cards unlock when you reach the moment in the video that teaches them.",
       nextIn: "Next card due", mine: "yours", ankiTitle: "Anki", ankiOff: "To review in Anki itself, install this player as an app from the Claude desktop app (artifact menu → Install as app), with Anki and the AnkiConnect add-on running.",
       ankiConnect: "Connect to Anki", ankiChecking: "Looking for Anki…", ankiOn: "Connected to Anki", ankiNo: "Anki isn't answering. Start Anki with the AnkiConnect add-on (code 2055492159).",
-      ankiMode: "Scheduling by Anki (FSRS – or RWKV if your Anki runs the RWKV fork)", rwkvHint: "RWKV: a small neural network that learns from your whole review history which card you are about to forget. Get it with JSchoreels' Anki fork (github.com/JSchoreels/anki); the player then follows its queue. Unchecked: the player schedules with FSRS itself.", ankiSync: "Sync AnkiWeb", ankiPush: "Add missing cards to Anki", ankiPushed: "added",
+      ankiMode: "Study Anki's decks (every answer goes to Anki)", rwkvHint: "RWKV is a small neural network trained on the review histories of 10,000 Anki users. It reads your whole history – every card, the time of day, how long you took – and shows the cards you are about to forget first. With Anki's decks on, it reads Anki's review log.", sched: "Scheduler", schedFsrs: "FSRS", schedRwkv: "RWKV – neural memory model", retention: "Target recall", rwkvLoading: "RWKV is reading your review history", rwkvReady: (n) => `RWKV has read ${n} reviews`, rwkvFail: "RWKV unavailable", ankiSync: "Sync AnkiWeb", ankiPush: "Add missing cards to Anki", ankiPushed: "added",
       ankiMapped: "cards matched in Anki", ankiPending: "reviews waiting to go to Anki", ankiSent: "sent", install: "Install as app",
       explainMiss: "I forgot this flashcard. Explain the idea behind it so it sticks – briefly, with a different angle than the card.",
       edit: "Edit with Claude", editTitle: "How should the card change?", editHow: "e.g. shorter, add an example, ask about the reason instead", editGo: "Rewrite", save: "Save", cancel: "Cancel", del: "Delete", delSure: "Really delete?",
@@ -26,7 +26,7 @@
       why: "Warum? Claude fragen", done: "Für jetzt erledigt.", doneBody: "Neue Karten werden frei, sobald du die Stelle im Video erreichst, die sie erklärt.",
       nextIn: "Nächste Karte fällig", mine: "eigene", ankiTitle: "Anki", ankiOff: "Um direkt in Anki zu wiederholen: den Player in der Claude-Desktop-App als App installieren (Artefakt-Menü → Als App installieren), Anki mit dem Add-on AnkiConnect geöffnet.",
       ankiConnect: "Mit Anki verbinden", ankiChecking: "Suche Anki …", ankiOn: "Mit Anki verbunden", ankiNo: "Anki antwortet nicht. Starte Anki mit dem Add-on AnkiConnect (Code 2055492159).",
-      ankiMode: "Planung durch Anki (FSRS – oder RWKV, wenn dein Anki den RWKV-Fork nutzt)", rwkvHint: "RWKV: ein kleines neuronales Netz, das aus deinem ganzen Lernverlauf lernt, welche Karte du gleich vergisst. Zu bekommen über den Anki-Fork von JSchoreels (github.com/JSchoreels/anki); der Player folgt dann dessen Reihenfolge. Ohne Haken plant der Player selbst mit FSRS.", ankiSync: "AnkiWeb synchronisieren", ankiPush: "Fehlende Karten zu Anki hinzufügen", ankiPushed: "hinzugefügt",
+      ankiMode: "Ankis Stapel lernen (jede Antwort geht an Anki)", rwkvHint: "RWKV ist ein kleines neuronales Netz, trainiert auf den Lernverläufen von 10.000 Anki-Nutzern. Es liest deinen ganzen Verlauf – jede Karte, die Tageszeit, wie lange du gebraucht hast – und zeigt zuerst die Karten, die du gleich vergisst. Mit Ankis Stapeln liest es Ankis Lernverlauf.", sched: "Planung", schedFsrs: "FSRS", schedRwkv: "RWKV – neuronales Gedächtnismodell", retention: "Ziel-Erinnerung", rwkvLoading: "RWKV liest deinen Lernverlauf", rwkvReady: (n) => `RWKV hat ${n} Wiederholungen gelesen`, rwkvFail: "RWKV nicht verfügbar", ankiSync: "AnkiWeb synchronisieren", ankiPush: "Fehlende Karten zu Anki hinzufügen", ankiPushed: "hinzugefügt",
       ankiMapped: "Karten in Anki gefunden", ankiPending: "Wiederholungen warten auf Anki", ankiSent: "übertragen", install: "Als App installieren",
       explainMiss: "Ich habe diese Karteikarte vergessen. Erklär die Idee dahinter so, dass sie hängen bleibt – kurz und aus einem anderen Blickwinkel als die Karte.",
       edit: "Mit Claude bearbeiten", editTitle: "Wie soll sich die Karte ändern?", editHow: "z. B. kürzer, mit Beispiel, nach dem Grund fragen", editGo: "Umschreiben", save: "Speichern", cancel: "Abbrechen", del: "Löschen", delSure: "Wirklich löschen?",
@@ -37,7 +37,7 @@
       linkHint: "Claude sucht die Stapel, die zu diesem Kurs gehören, und verknüpft jede Karte mit der Stelle, die sie erklärt. Neue Karten werden danach automatisch verknüpft."
     }
   };
-  let T = S.en, course = null, fsrs = null, current = null, revealed = false, focusIds = null;
+  let T = S.en, course = null, fsrs = null, current = null, revealed = false, focusIds = null, shown = { id: null, at: 0 };
   const F = window.FSRS;
   const store = LVP.store;
   const srs = () => { const s = store.get("srs"); if (s) { s.cards ||= {}; s.log ||= []; s.newDays ||= {}; return s; } store.data.srs = { _key: "srs", cards: {}, log: [], newDays: {} }; return store.data.srs; };
@@ -122,13 +122,14 @@
   function queue(deck = null) {
     const st = srs().cards, now = Date.now(), due = [], fresh = [];
     let locked = 0, learning = 0;
+    const rwOn = useRwkv() && rw.ready && rw.key === "player";
     for (const c of allCards()) {
       if (!inDeck(c, deck)) continue;
       const s = st[c.id];
-      if (s && s.state !== 0) { if (new Date(s.due).getTime() <= now) { due.push(c); if (s.state !== 2) learning++; } }
+      if (s && s.state !== 0) { if (rwOn && rw.p[c.id] != null ? rwDue(c.id) : new Date(s.due).getTime() <= now) { due.push(c); if (s.state !== 2) learning++; } }
       else if (unlocked(c)) fresh.push(c); else locked++;
     }
-    due.sort((a, b) => new Date(st[a.id].due) - new Date(st[b.id].due));
+    due.sort(rwOn ? (a, b) => (rw.p[a.id] ?? 0) - (rw.p[b.id] ?? 0) : (a, b) => new Date(st[a.id].due) - new Date(st[b.id].due));
     if (focusIds) {  // practising one concept: its cards first, due or not (once each)
       const extra = allCards().filter((c) => focusIds.has(c.id) && !due.includes(c) && st[c.id] && st[c.id].state !== 0);
       due.unshift(...extra.filter((c) => !(st[c.id].focusDone)));
@@ -146,7 +147,7 @@
       for (const c of allCards()) for (const t of c.tags || []) {
         if (/^v\d+\.\d+$/.test(t) || ["video-question", "mine", "definition"].includes(t)) continue;
         const s = st[c.id];
-        const r = s && s.state !== 0 ? fsrs.get_retrievability(reviveCard(s), now, false) : 0;
+        const r = !(s && s.state !== 0) ? 0 : rw.ready && rw.key === "player" && rw.p[c.id] != null ? rw.p[c.id] : fsrs.get_retrievability(reviveCard(s), now, false);
         (tags[t] ||= { tag: t, cards: [], seen: 0, sum: 0 }).cards.push(c.id);
         tags[t].sum += r; if (s && s.state !== 0) tags[t].seen++;
       }
@@ -160,6 +161,106 @@
     const n = LVP.review.dueCount(), pill = $("due-pill");
     pill.textContent = LVP.L.reviewNav + (n ? ` · ${n} ${T.due}` : ""); pill.onclick = () => LVP.selectTab("review");
   };
+
+  /* --- RWKV: a neural memory model (rwkv.js, in a worker) reads the whole review history and
+     orders the reviews by the chance of forgetting; FSRS keeps the bookkeeping underneath --- */
+  const rw = { worker: null, key: null, ready: false, loading: false, failed: null, progress: 0, error: "", n: 0, p: {}, meta: {}, last: {}, presets: {}, seq: 0, wait: {} };
+  const useRwkv = () => !!course?.rwkv && settings().scheduler === "rwkv";
+  const target = () => settings().retention || 0.9;
+  const rwKey = () => (ankiLive() ? "anki" : "player");
+  function rwCall(msg, onProgress) {
+    if (!rw.worker) {
+      rw.worker = new Worker("rwkv-worker.js");
+      rw.worker.onmessage = ({ data }) => {
+        const w = rw.wait[data.id]; if (!w) return;
+        if (data.progress != null) { w.onProgress?.(data.progress); return; }
+        delete rw.wait[data.id]; if (data.error) w.rej(new Error(data.error)); else w.res(data.result);
+      };
+      rw.worker.onerror = (e) => { for (const w of Object.values(rw.wait)) w.rej(new Error(e.message || "worker")); rw.wait = {}; };
+    }
+    return new Promise((res, rej) => { const id = ++rw.seq; rw.wait[id] = { res, rej, onProgress }; rw.worker.postMessage({ ...msg, id }); });
+  }
+  const pMeta = (c) => ({ card: c.id, note: c.note || c.id, deck: c.deck || "-", preset: "player" });
+  function playerHistory() {
+    const meta = {}; for (const c of allCards()) meta[c.id] = pMeta(c);
+    const events = srs().log.filter((e) => meta[e.id] && e.g >= 1).map((e) => ({ ...meta[e.id], ts: Date.parse(e.at), rating: e.g, duration: e.ms, state: e.st }));
+    return { meta, events: events.sort((a, b) => a.ts - b.ts) };
+  }
+  const chunks = (xs, n) => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
+  async function ankiHistory() {
+    const ids = await anki.call("findCards", { query: "-is:new -is:suspended" }), meta = {}, events = [];
+    for (const part of chunks(ids, 500)) {
+      for (const ci of await anki.call("cardsInfo", { cards: part })) meta["k" + ci.cardId] = { card: "k" + ci.cardId, note: "n" + ci.note, deck: ci.deckName, preset: "-", cardId: ci.cardId, type: ci.type };
+    }
+    for (const d of new Set(Object.values(meta).map((m) => m.deck))) {
+      const conf = await anki.call("getDeckConfig", { deck: d }).catch(() => null);
+      rw.presets[d] = conf?.id != null ? "c" + conf.id : "-";
+    }
+    for (const m of Object.values(meta)) m.preset = rw.presets[m.deck];
+    for (const part of chunks(ids, 500)) {
+      const revs = await anki.call("getReviewsOfCards", { cards: part.map(String) });
+      for (const [cid, list] of Object.entries(revs || {})) {
+        const m = meta["k" + cid]; if (!m) continue;
+        for (const r of list) {   // revlog type 0 learn, 1 review, 2 relearn, 3 filtered, 4 manual (no review)
+          if (!(r.ease >= 1) || r.type > 3) continue;
+          events.push({ card: m.card, note: m.note, deck: m.deck, preset: m.preset, ts: r.id, rating: r.ease, duration: r.time, state: [1, 2, 3, 2][r.type] });
+        }
+      }
+    }
+    return { meta, events: events.sort((a, b) => a.ts - b.ts) };
+  }
+  function rwState() {
+    if (rw.error) return `${T.rwkvFail}: ${rw.error}`;
+    if (rw.loading) return `${T.rwkvLoading} … ${Math.round(rw.progress * 100)} %`;
+    return rw.ready ? T.rwkvReady(rw.n) : "";
+  }
+  async function rwLoad() {
+    const key = rwKey();
+    if (rw.loading || (rw.ready && rw.key === key) || rw.failed === key) return;
+    rw.loading = true; rw.ready = false; rw.error = ""; rw.progress = 0;
+    try {
+      const h = key === "anki" ? await ankiHistory() : playerHistory();
+      const r = await rwCall({ type: "load", events: h.events, max: 20000 }, (p) => { rw.progress = p; const s = $("rwkv-state"); if (s) s.textContent = rwState(); });
+      rw.meta = h.meta; rw.n = r.n; rw.key = key; rw.last = {};
+      for (const e of h.events) rw.last[e.card] = e.ts;
+      await rwPredict(); rw.ready = true;
+    } catch (e) { rw.error = String(e?.message || e); rw.failed = key; }
+    rw.loading = false; render(); LVP.updateDue();
+  }
+  async function rwPredict() {
+    rw.p = await rwCall({ type: "predict", cards: Object.values(rw.meta).filter((m) => rw.last[m.card]).map(({ card, note, deck, preset }) => ({ card, note, deck, preset })), now: Date.now() });
+  }
+  const recent = (card) => Date.now() - (rw.last[card] || 0) < 120000;   // just answered: give it two minutes
+  const rwDue = (card) => { const p = rw.p[card]; return p != null && p < target() && !recent(card); };
+  const rwMeta = (c) => {
+    if (!rw.ready) return null;
+    if (rw.key === "player" && !c.cardId) return pMeta(c);
+    if (rw.key === "anki" && c.cardId) return rw.meta["k" + c.cardId] || { card: "k" + c.cardId, note: "n" + c.noteId, deck: c.deck, preset: rw.presets[c.deck] || "-", cardId: c.cardId, type: c.ankiType };
+    return null;
+  };
+  async function rwFeed(meta, grade, ms, state) {
+    rw.meta[meta.card] ||= meta; rw.last[meta.card] = Date.now();
+    const { card, note, deck, preset } = meta;
+    await rwCall({ type: "feed", event: { card, note, deck, preset, ts: Date.now(), rating: grade, duration: ms, state } });
+    await rwPredict(); LVP.updateDue(); if (deckView === null) render();
+  }
+  setInterval(() => { if (rw.ready && !rw.loading) rwPredict().then(() => LVP.updateDue()).catch(() => {}); }, 300000);
+  function schedRow() {
+    const wrap = el("div", "anki"); if (!course?.rwkv) return wrap;
+    const row = el("div", "row"), sel = el("select"); sel.id = "scheduler";
+    for (const [v, t] of [["fsrs", T.schedFsrs], ["rwkv", T.schedRwkv]]) { const o = el("option", null, t); o.value = v; sel.append(o); }
+    sel.value = useRwkv() ? "rwkv" : "fsrs";
+    sel.onchange = () => { const s = settings(); s.scheduler = sel.value; rw.failed = null; store.set("review-settings", s, true); render(); LVP.updateDue(); };
+    row.append(el("b", null, T.sched), sel);
+    if (useRwkv()) {
+      const ret = el("input"); ret.type = "number"; ret.min = "0.7"; ret.max = "0.97"; ret.step = "0.01"; ret.value = String(target()); ret.style.width = "70px"; ret.id = "retention";
+      ret.onchange = () => { const s = settings(); s.retention = Math.min(0.97, Math.max(0.7, Number(ret.value) || 0.9)); store.set("review-settings", s, true); render(); LVP.updateDue(); };
+      row.append(el("span", null, T.retention), ret);
+    }
+    wrap.append(row, el("span", "hint", T.rwkvHint));
+    if (useRwkv()) { const st = el("span", "state", rwState()); st.id = "rwkv-state"; wrap.append(st); }
+    return wrap;
+  }
 
   /* --- rendering a card --- */
   function face(c, back) {
@@ -208,8 +309,10 @@
     const by = await deckStats(names);
     const table = el("div", "decks");
     const head = el("div", "deckrow head"); head.append(el("span", null, T.deck), el("span", "n new", T.colNew), el("span", "n learn", T.colLearn), el("span", "n due", T.colDue)); table.append(head);
+    const rwOn = useRwkv() && rw.ready && rw.key === "anki";
     for (const d of names) {
-      const x = by[d] || {}, depth = d.split("::").length - 1;
+      const x = { ...(by[d] || {}) }, depth = d.split("::").length - 1;
+      if (rwOn) x.review_count = Object.values(rw.meta).filter((m) => m.type === 2 && inDeck(m, d) && rwDue(m.card)).length;
       const row = el("button", "deckrow");
       const name = el("span", "dname", d.split("::").pop()); name.style.paddingLeft = depth * 20 + "px";
       const n = (v, cls) => el("span", "n " + cls + (v ? "" : " zero"), String(v || 0));
@@ -218,13 +321,17 @@
       table.append(row);
     }
     box.textContent = ""; box.append(el("p", "hint", T.fromAnki), table);
-    const more = el("details", "anki-more"); more.append(el("summary", null, T.settings)); more.append(ankiPanel(), dailyRow()); box.append(more);
+    const more = el("details", "anki-more"); more.append(el("summary", null, T.settings)); more.append(ankiPanel(), schedRow(), dailyRow()); box.append(more);
   }
   async function ankiNext(deck) {
     // Anki's order: learning cards that are due, then reviews, then new cards (within Anki's daily limit)
     const st = (await deckStats([deck]))[deck];
     const learn = await anki.call("findCards", { query: `${q_(deck)} is:learn is:due` });
-    const due = await anki.call("findCards", { query: `${q_(deck)} is:review is:due -is:learn` });
+    let due = await anki.call("findCards", { query: `${q_(deck)} is:review is:due -is:learn` });
+    if (useRwkv() && rw.ready && rw.key === "anki") {   // RWKV decides which reviews are due, most at risk first
+      due = Object.values(rw.meta).filter((m) => m.type === 2 && inDeck(m, deck) && rwDue(m.card) && !learn.includes(m.cardId)).sort((a, b) => rw.p[a.card] - rw.p[b.card]).map((m) => m.cardId);
+      if (st) st.review_count = due.length;
+    }
     const fresh = (st?.new_count || 0) ? await anki.call("findCards", { query: `${q_(deck)} is:new -is:suspended -is:buried` }) : [];
     const ids = [...learn, ...due, ...fresh.slice(0, st?.new_count || 0)];
     return { ids, counts: st || {} };
@@ -242,7 +349,7 @@
       const ours = allCards().find((c) => c.id === byCardId()[ids[0]]);
       const f = Object.values(info.fields || {}).sort((a, b) => a.order - b.order).map((x) => x.value);
       const isCloze = /\{\{c\d+::/.test(f[0] || "");
-      current = { ...(ours || {}), id: ours?.id || "anki-" + ids[0], cardId: ids[0], deck: info.deckName,
+      current = { ...(ours || {}), id: ours?.id || "anki-" + ids[0], cardId: ids[0], deck: info.deckName, noteId: info.note, ankiType: info.type,
         front: ours?.front ?? (isCloze ? null : plain(f[0])), back: ours?.back ?? (isCloze ? null : plain(f[1])),
         cloze: ours?.cloze ?? (isCloze ? plain(f[0]) : null), extra: ours?.extra ?? plain(isCloze ? f[1] : f[2]) };
       revealed = false;
@@ -250,21 +357,27 @@
     studyCard(box, current, null);
   }
   async function rateAnki(c, grade) {
+    const ms = Math.min(60000, Date.now() - shown.at), meta = rwMeta(c);
     await anki.call("answerCards", { answers: [{ cardId: c.cardId, ease: grade }] }).catch(() => {});
+    if (meta) {
+      rwFeed(meta, grade, ms, c.ankiType ?? 2).catch(() => {});
+      anki.call("cardsInfo", { cards: [c.cardId] }).then(([ci]) => { if (ci) meta.type = ci.type; }).catch(() => {});
+    }
     // keep the player's own record in step, so the concept map and the coach see the review
-    if (c.id && !c.id.startsWith("anki-")) srs().log.push({ id: c.id, g: grade, at: new Date().toISOString(), sent: true });
+    if (c.id && !c.id.startsWith("anki-")) srs().log.push({ id: c.id, g: grade, at: new Date().toISOString(), sent: true, ms, st: c.ankiType ?? 2 });
     current = null; revealed = false; render(); LVP.updateDue();
   }
 
   function render() {
     const box = $("review"); if (!box) return;
+    if (useRwkv()) rwLoad();
     if (ankiLive()) { (deckView === null ? ankiDeckList(box) : ankiStudy(box)).catch((e) => { box.textContent = ""; box.append(el("p", "err", String(e?.message || e))); }); return; }
     box.textContent = "";
     if (!F) { box.append(el("p", "err", "FSRS library failed to load.")); return; }
     if (deckView === null) {
       deckList(box);
       const more = el("details", "anki-more"); more.append(el("summary", null, T.settings));
-      more.append(ankiPanel(), dailyRow()); box.append(more);
+      more.append(ankiPanel(), schedRow(), dailyRow()); box.append(more);
       return;
     }
     const q = queue(deckView), st = srs();
@@ -286,6 +399,7 @@
   }
   // one card on screen; st = the player's own schedule (null when Anki schedules)
   function studyCard(box, c, st) {
+    if (shown.id !== c.id) shown = { id: c.id, at: Date.now() };
     {
       const f = el("div", "flash");
       const head = el("div", "hint"); head.textContent = (c.deck || "") + (c.id.startsWith("m-") ? ` · ${T.mine}` : ""); f.append(head);
@@ -306,11 +420,17 @@
         f.append(acts);
         const rates = el("div", "rates");
         const now = new Date(), card0 = st && (st.cards[c.id] ? reviveCard(st.cards[c.id]) : F.createEmptyCard(now));
-        const prev = st ? fsrs.repeat(card0, now) : null;
+        const meta = useRwkv() && rwMeta(c), prev = st && !meta ? fsrs.repeat(card0, now) : null, smalls = [];
         [["again", 1], ["hard", 2], ["good", 3], ["easy", 4]].forEach(([k, g]) => {
-          const b = el("button", k); b.append(el("span", null, `${g} · ${T[k]}`), el("small", null, prev ? span(prev[g].card.due - now) : ""));
+          const sm = el("small", null, prev ? span(prev[g].card.due - now) : ""); smalls.push(sm);
+          const b = el("button", k); b.append(el("span", null, `${g} · ${T[k]}`), sm);
           b.onclick = () => rate(c, g); rates.append(b);
         });
+        if (meta) {
+          const { card, note, deck, preset } = meta, state = c.cardId ? (c.ankiType ?? 2) : (st?.cards[c.id]?.state ?? 0);
+          rwCall({ type: "preview", card: { card, note, deck, preset, state }, now: Date.now(), target: target() })
+            .then((ms) => smalls.forEach((x, i) => { x.textContent = span(Math.max(60000, ms[i])); })).catch(() => {});
+        }
         f.append(rates);
       }
       box.append(f);
@@ -356,11 +476,13 @@
   function rate(c, grade) {
     if (ankiLive() && c.cardId) return rateAnki(c, grade);
     const st = srs(), now = new Date();
-    const wasNew = !st.cards[c.id] || st.cards[c.id].state === 0;
+    const wasNew = !st.cards[c.id] || st.cards[c.id].state === 0, before = st.cards[c.id]?.state ?? 0;
+    const ms = Math.min(60000, Date.now() - shown.at), meta = useRwkv() && rwMeta(c);
     const res = fsrs.next(st.cards[c.id] ? reviveCard(st.cards[c.id]) : F.createEmptyCard(now), now, grade);
     st.cards[c.id] = { ...res.card, due: res.card.due.toISOString(), last_review: res.card.last_review ? new Date(res.card.last_review).toISOString() : now.toISOString() };
     if (wasNew) st.newDays[today()] = (st.newDays[today()] || 0) + 1;
-    st.log.push({ id: c.id, g: grade, at: now.toISOString(), sent: false });
+    st.log.push({ id: c.id, g: grade, at: now.toISOString(), sent: false, ms, st: before });
+    if (meta) rwFeed(meta, grade, ms, before).catch(() => {});
     if (focusIds?.has(c.id)) { focusIds.delete(c.id); if (!focusIds.size) focusIds = null; }
     if (st.log.length > 3000) st.log = st.log.slice(-3000);
     store.set("srs", st);
@@ -558,7 +680,7 @@
     box.append(el("span", "hint", `${anki.mapped}/${allCards().length} ${T.ankiMapped}` + (pending ? ` · ${pending} ${T.ankiPending}` : "")));
     const lab = el("label", "switch"); const cb = el("input"); cb.type = "checkbox"; cb.checked = !!settings().ankiMode; cb.id = "anki-mode";
     cb.onchange = async () => { const s = settings(); s.ankiMode = cb.checked; store.set("review-settings", s, true); if (cb.checked) { await anki.pull().catch(() => {}); } render(); LVP.updateDue(); };
-    lab.append(cb, document.createTextNode(" " + T.ankiMode)); box.append(lab, el("span", "hint", T.rwkvHint));
+    lab.append(cb, document.createTextNode(" " + T.ankiMode)); box.append(lab);
     const r = el("div", "row");
     const sync = el("button", "btn small", T.ankiSync); sync.onclick = async () => { sync.disabled = true; await anki.flush(); await anki.call("sync").catch(() => {}); if (settings().ankiMode) await anki.pull().catch(() => {}); sync.disabled = false; render(); LVP.updateDue(); };
     const push = el("button", "btn small", T.ankiPush); push.onclick = async () => { push.disabled = true; const n = await anki.push().catch(() => 0); anki.status = `${T.ankiOn} · ${n} ${T.ankiPushed}`; render(); };

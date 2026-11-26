@@ -16,6 +16,7 @@ if needed; `out_dir` for large results). Documents, by `_key`:
   right/partly/wrong, `feedback`, `rewatch` seconds), `explain` (`text`, `result` with `score`,
   `missing`, `wrong`), `notes`
 - `srs`: FSRS state per card id (`lapses`, `stability`, `due`) and the review `log`
+  (`g` rating, `at`, `ms` answer time, `st` state before the review)
 - `exams`: practice exams with score and `misses` (question, video, t)
 - `lab-<video>-<section>`: lab, code, `checks`, `passed`
 - `mine`: cards the learner created; `coach`: your last note

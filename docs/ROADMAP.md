@@ -21,6 +21,9 @@ Roughly in order. ✓ = done.
   questions, explain-back, Socratic mode, notes, cards from any moment.
 - ✓ **Flashcards in the player** – FSRS, cards unlock at the moment that teaches them, lapses
   link back to the video; direct AnkiConnect bridge in the desktop app.
+- ✓ **RWKV scheduler in the player** – the RWKV-7 memory model of srs-benchmark ported to
+  JavaScript (matches PyTorch to 1e-7), replays the review history (Anki's revlog or the
+  player's log) and orders reviews by the chance of forgetting.
 - ✓ **Labs** – designed per section by Claude (verified against their own solution), Python
   or JavaScript in the browser, graded hints, a lab tutor that runs code; authored labs.
 - ✓ **Exam practice** – interleaved across watched videos, graded report with rewatch links.

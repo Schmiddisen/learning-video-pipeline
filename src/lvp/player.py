@@ -23,6 +23,7 @@ import sys
 import unicodedata
 from pathlib import Path
 
+from lvp import rwkv_weights
 from lvp.project import BUILD, CARDS, ROOT, VIDEOS, settings
 
 OUT = BUILD / "player"
@@ -355,6 +356,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--cards", type=Path, help="flashcard folder (default: cards/)")
     ap.add_argument("--labs", type=Path, help="authored labs folder (default: labs/)")
     ap.add_argument("--no-python", action="store_true", help="skip Pyodide (labs: JavaScript)")
+    ap.add_argument("--no-rwkv", action="store_true", help="skip the RWKV memory model (~11 MB)")
     ap.add_argument("--only-data", action="store_true",
                     help="rewrite course.json and the page only (videos exported)")  # fmt: skip
     args = ap.parse_args(argv)
@@ -376,8 +378,10 @@ def main(argv: list[str] | None = None) -> int:
     labs_dir = args.labs or ROOT / "labs"
     labs = labs_for(labs_dir, videos) if labs_dir.exists() else []
     python = not args.no_python and _pyodide(OUT / "pyodide")
+    rwkv = not args.no_rwkv and rwkv_weights.ensure(OUT)
     course = {"format": FORMAT, "title": title, "language": s.language, "videos": videos,
               "cards": cards, "labs": labs, "learner": learner, "python": python,
+              "rwkv": rwkv,
               "repo": ROOT.name, "render": _render_command()}  # fmt: skip
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "course.json").write_text(json.dumps(course, ensure_ascii=False), encoding="utf-8")
