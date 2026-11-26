@@ -52,6 +52,7 @@ const STR = {
       "Today: what to do next, your weak spots and exam practice.",
     ],
     session: "Start a study session", sessionNext: "Reviews done – on to the video",
+    skippedOne: "You jumped over a question – answer it now?", skippedMany: "questions jumped over – answer them now?",
     concepts: "How well you remember each concept", cardsSeen: "cards learned", practiseConcept: "Practise this concept now"
   },
   de: {
@@ -103,6 +104,7 @@ const STR = {
       "Heute: was als Nächstes dran ist, deine Schwachstellen und Klausurtraining.",
     ],
     session: "Lerneinheit starten", sessionNext: "Wiederholung erledigt – weiter zum Video",
+    skippedOne: "Du hast eine Frage übersprungen – jetzt beantworten?", skippedMany: "Fragen übersprungen – jetzt beantworten?",
     concepts: "Wie gut du jedes Konzept behältst", cardsSeen: "Karten gelernt", practiseConcept: "Dieses Konzept jetzt üben"
   }
 };
@@ -236,7 +238,21 @@ video.addEventListener("ended", () => { setPlayIcon(); if (!cur) return; prog().
 $("back").onclick = () => seekTo(video.currentTime - 10);
 $("speed").onchange = (e) => { video.playbackRate = Number(e.target.value); };
 const seekBar = $("seek");
-seekBar.addEventListener("input", () => { video.currentTime = Number(seekBar.value); lastT = video.currentTime; tick(); });
+seekBar.addEventListener("input", () => { const from = video.currentTime; video.currentTime = Number(seekBar.value); noteSkipped(from, video.currentTime); lastT = video.currentTime; tick(); });
+// jumping over a question skips it on purpose (no interruption while scrubbing) – but say so
+function noteSkipped(from, to) {
+  if (!cur || to <= from) return;
+  const missed = cur.quizzes.filter((q) => from < q.t + 0.4 && q.t + 0.4 <= to && !prog().answers[quizKey(q)]);
+  const box = $("skipped"); box.textContent = "";
+  box.hidden = !missed.length;
+  if (!missed.length) return;
+  box.append(document.createTextNode(missed.length === 1 ? LVP.L.skippedOne : `${missed.length} ${LVP.L.skippedMany}`));
+  for (const q of missed.slice(0, 3)) {
+    const b = el("button", "btn small", `${LVP.L[q.quiz]} ${fmt(q.t)}`);
+    b.onclick = () => { box.hidden = true; if (!video.paused) video.pause(); openQuiz(q, { free: true }); };
+    box.append(b);
+  }
+}
 $("full").onclick = () => { (document.fullscreenElement ? document.exitFullscreen() : stage.requestFullscreen()).catch(() => {}); };
 document.addEventListener("keydown", (e) => {
   if (e.target.matches("textarea, input, select")) return;
