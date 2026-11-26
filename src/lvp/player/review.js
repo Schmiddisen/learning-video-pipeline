@@ -14,7 +14,7 @@
       ankiMapped: "cards matched in Anki", ankiPending: "reviews waiting to go to Anki", ankiSent: "sent", install: "Install as app",
       explainMiss: "I forgot this flashcard. Explain the idea behind it so it sticks – briefly, with a different angle than the card.",
       dailyNew: "New cards per day", notify: "cards are due", videoQuestions: "Video questions",
-      link: "Link my Anki cards to the videos", linkAgain: "Link new Anki cards", linked: "linked", linking: "Claude is linking", linkedNew: "cards linked to videos",
+      link: "Link my Anki cards to the videos", linkAgain: "Link new Anki cards", linked: "linked", linking: "Claude is linking", linkedNew: "cards linked to videos", linkReport: (d, all, n) => `${d} decks checked: ${all} cards are linked to their video moment (${n} new this time).`,
       linkHint: "Claude finds the decks that belong to this course and links each card to the moment that teaches it. New cards are linked automatically from then on."
     },
     de: {
@@ -27,7 +27,7 @@
       ankiMapped: "Karten in Anki gefunden", ankiPending: "Wiederholungen warten auf Anki", ankiSent: "übertragen", install: "Als App installieren",
       explainMiss: "Ich habe diese Karteikarte vergessen. Erklär die Idee dahinter so, dass sie hängen bleibt – kurz und aus einem anderen Blickwinkel als die Karte.",
       dailyNew: "Neue Karten pro Tag", notify: "Karten sind fällig", videoQuestions: "Fragen aus den Videos",
-      link: "Meine Anki-Karten mit den Videos verknüpfen", linkAgain: "Neue Anki-Karten verknüpfen", linked: "verknüpft", linking: "Claude verknüpft", linkedNew: "Karten mit Videos verknüpft",
+      link: "Meine Anki-Karten mit den Videos verknüpfen", linkAgain: "Neue Anki-Karten verknüpfen", linked: "verknüpft", linking: "Claude verknüpft", linkedNew: "Karten mit Videos verknüpft", linkReport: (d, all, n) => `${d} Stapel geprüft: ${all} Karten sind mit ihrer Stelle im Video verknüpft (${n} davon neu).`,
       linkHint: "Claude sucht die Stapel, die zu diesem Kurs gehören, und verknüpft jede Karte mit der Stelle, die sie erklärt. Neue Karten werden danach automatisch verknüpft."
     }
   };
@@ -323,23 +323,24 @@
     const L = links(), checked = new Set(L.checked);
     const index = course.videos.map((v) => `${v.id}: ${LVP.videoLabel(v)}\n` + v.chapters.map((c) => `  ${fmt(c.t)} ${c.title}`).join("\n")).join("\n");
     let decks = await anki.call("deckNames");
-    if (!L.decks) {
+    if (!L.decks || (L.allDecks || []).join("|") !== decks.join("|")) {   // ask again when decks change
       const r = await sample.json([
         `Which of these Anki decks contain flashcards about the topics of the course "${course.title}"? Videos of the course:`,
         index, "", "Decks:", decks.map((d) => "- " + d).join("\n"),
         'Reply with only JSON: {"decks": ["exact deck name", ...]} – include a parent deck only if its own cards belong; [] if none.',
-      ].join("\n"), { cache: false });
-      L.decks = (r.decks || []).filter((d) => decks.includes(d));
+      ].join("\n"), { cache: false, model: "claude-haiku-5-5", modelTier: "quick" });
+      L.decks = (r.decks || []).filter((d) => decks.includes(d)); L.allDecks = decks;
       store.set("anki-links", L, true);
     }
     const inCourse = new Set(Object.values(anki.map).flat());
     const notes = [];
+    let viaCourse = 0;
     for (const d of L.decks) {
       const ids = await anki.call("findNotes", { query: `"deck:${d.replace(/"/g, "")}" -"deck:${d.replace(/"/g, "")}::*"` }).catch(() => []);
       const todo = ids.filter((id) => !checked.has(id));
       for (let i = 0; i < todo.length; i += 200) {
         for (const n of await anki.call("notesInfo", { notes: todo.slice(i, i + 200) })) {
-          if ((n.cards || []).some((c) => inCourse.has(c))) { checked.add(n.noteId); continue; }   // a course card already
+          if ((n.cards || []).some((c) => inCourse.has(c))) { checked.add(n.noteId); viaCourse++; continue; }   // a course card: linked already
           const f = Object.values(n.fields || {}).sort((a, b) => a.order - b.order).map((x) => x.value);
           const isCloze = /\{\{c\d+::/.test(f[0] || "");
           notes.push({ id: n.noteId, deck: d, cards: n.cards, tags: n.tags || [], front: isCloze ? null : plain(f[0]), back: isCloze ? null : plain(f[1]), cloze: isCloze ? plain(f[0]) : null, extra: isCloze ? plain(f[1]) : plain(f[2]) });
@@ -356,7 +357,7 @@
           index, "",
           "Cards:", batch.map((n, k) => `${k}. ${(n.cloze || (n.front + " → " + n.back)).slice(0, 300)}`).join("\n"), "",
           'Reply with only JSON: {"links": [{"n": card number, "video": "video id" | null, "chapter": "m:ss" | null}]} – null when no video teaches it.',
-        ].join("\n"), { cache: false });
+        ].join("\n"), { cache: false, model: "claude-haiku-5-5", modelTier: "quick" });
         for (const x of r.links || []) {
           const n = batch[Number(x.n)]; if (!n) continue;
           const v = course.videos.find((y) => y.id === x.video);
@@ -372,6 +373,7 @@
     L.checked = [...checked]; L.done = true; store.set("anki-links", L, true);
     anki.mapped = Object.keys(anki.map).length;
     if (settings().ankiMode) await anki.pull().catch(() => {});
+    anki.linkReport = { decks: L.decks.length, viaCourse: viaCourse + Object.values(anki.map).filter(() => false).length, linked, total: Object.keys(L.notes).length };
     return linked;
   };
   function ankiPanel() {
@@ -399,7 +401,8 @@
         lk.disabled = true;
         try {
           const got = await anki.link((i, total) => { lk.textContent = `${T.linking} ${i}/${total}`; });
-          anki.status = `${T.ankiOn} · ${got} ${T.linkedNew}`;
+          const r = anki.linkReport || {};
+          anki.status = T.linkReport(r.decks || 0, anki.mapped, got);
         } catch (e) { anki.status = LVP.errText(e); }
         render(); LVP.updateDue();
       };
