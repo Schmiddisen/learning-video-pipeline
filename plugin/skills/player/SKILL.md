@@ -30,8 +30,10 @@ uv run lvp-player --only-data             # after changing cards/labs/learner.md
 uv run lvp-player --slug attention-paper --library /path/to/library.json   # into an existing player
 ```
 For an existing player: `Artifact` `read` its URL first, then `read` with `path:
-"library.json"` (saved locally; missing in a player with a single course – then leave out
-`--library`). The export writes `build/player/courses/<slug>/` and the merged
+"library.json"` (saved locally). A player with a single course has none: write one that
+lists the root course (`{"format": 1, "courses": [{"slug": "", "title": "<its title>",
+"language": "<xx>", "path": ""}]}`) and pass it – without it the root course drops out of
+the switcher. The export writes `build/player/courses/<slug>/` and the merged
 `build/player/library.json`; entries of the other courses are kept.
 Writes `build/player/`: `index.html`, `app.js`, `review.js`, `labs.js`, `exam.js`,
 `lab-worker.js`, `fsrs.js` (the page; ts-fsrs is bundled, MIT), `course.json` (timeline per video, cards linked to their moment,

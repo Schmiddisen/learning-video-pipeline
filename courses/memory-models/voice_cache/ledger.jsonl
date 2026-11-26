@@ -253,3 +253,8 @@
 {"ts": "2026-11-26T22:21:11", "file": "keep-it-fair-the-way-the-benchmark-couldn-t-same-5f9be3b7", "chars": 109, "seconds": 8.24, "est_usd": 0.0034, "gen_id": "gen-tts-1795731667-W9yd0pow77mg8gksRjQO", "run": "narrate-20261126-221804"}
 {"ts": "2026-11-26T22:21:11", "file": "one-last-twist-once-a-model-chooses-which-cards-6e7dcc3b", "chars": 113, "seconds": 8.0, "est_usd": 0.0033, "gen_id": "gen-tts-1795731668-k09lgSxCeH4YDH8dAQTC", "run": "narrate-20261126-221804"}
 {"ts": "2026-11-26T22:21:11", "file": "a-benchmark-of-old-logs-can-t-show-that-loop-45ad45ec", "chars": 114, "seconds": 7.44, "est_usd": 0.0031, "gen_id": "gen-tts-1795731669-eABMtwsrmT69k7GXwRQf", "run": "narrate-20261126-221804"}
+{"ts": "2026-11-26T22:24:57", "file": "each-channel-outputs-the-average-of-all-past-7c6c3975", "chars": 79, "seconds": 6.36, "est_usd": 0.0027, "gen_id": "gen-tts-1795731895-9pufvEjF6WFVX5paUZ8B", "run": "20261126-222450"}
+{"ts": "2026-11-26T22:28:58", "kind": "critic", "video": "v01_1_predicts_predicts_l.mp4", "usd": 0.01174}
+{"ts": "2026-11-26T22:29:32", "kind": "critic", "video": "v01_2_grading_grading_l.mp4", "usd": 0.01447}
+{"ts": "2026-11-26T22:30:05", "kind": "critic", "video": "v01_3_rwkv_rwkv_l.mp4", "usd": 0.01219}
+{"ts": "2026-11-26T22:30:50", "kind": "critic", "video": "v01_4_doubts_doubts_l.mp4", "usd": 0.01535}

@@ -49,3 +49,9 @@ confused viewer in real courses.
   and narration line (the `feedback` skill).
 - Keep the source material out of public repos (`.gitignore` covers material PDFs/videos).
 - Commit `voice_cache/` (paid narration) and `tex_cache/`; never commit `build/` or `media/`.
+- Adding a course to an existing player: the exported `index.html` carries the *new* course's
+  title – restore the player's title before publishing. Compare the exported root scripts'
+  hashes with the `files` listing first: another session may have published a newer engine
+  meanwhile; send only `library.json`, `index.html` and `courses/<slug>/` unless yours is newer.
+- Curriculum "additions" need the same number check as scripts: a claimed baseline value
+  ("always predicting 0.89 gives 0.39") was wrong and only the scene writer caught it.
