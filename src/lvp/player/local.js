@@ -11,7 +11,7 @@
       finding: "Looking for the project folder…", notFound: "Project folder not found. Paste its path:", use: "Use this folder",
       pulling: "Getting the latest version…", pullFailed: "Could not update automatically – rendering the version on this PC.",
       running: "Rendering – this can take a while; you can keep studying.", done: "Done.", failed: "Stopped with an error – see the log.",
-      folder: "Project folder:", noGit: "git not found – using the version on this PC.", outdated: "This PC has an old version of the project. In GitHub Desktop: Fetch origin, then Pull origin – then press Render again.",
+      fromPc: "from this PC", folder: "Project folder:", noGit: "git not found – using the version on this PC.", outdated: "This PC has an old version of the project. In GitHub Desktop: Fetch origin, then Pull origin – then press Render again.",
       install: "Install as app", needApp: "Rendering on your PC works in the installed app (Claude desktop app → artifact menu → Install as app)."
     },
     de: {
@@ -20,7 +20,7 @@
       finding: "Suche den Projektordner …", notFound: "Projektordner nicht gefunden. Pfad einfügen:", use: "Diesen Ordner nehmen",
       pulling: "Hole die neueste Version …", pullFailed: "Automatisches Aktualisieren ging nicht – rendere die Version auf diesem PC.",
       running: "Rendert – das kann dauern; du kannst weiterlernen.", done: "Fertig.", failed: "Mit Fehler beendet – siehe Protokoll.",
-      folder: "Projektordner:", noGit: "git nicht gefunden – nehme die Version auf diesem PC.", outdated: "Auf diesem PC liegt eine alte Version des Projekts. In GitHub Desktop: Fetch origin, dann Pull origin – danach noch einmal Rendern.",
+      fromPc: "vom PC", folder: "Projektordner:", noGit: "git nicht gefunden – nehme die Version auf diesem PC.", outdated: "Auf diesem PC liegt eine alte Version des Projekts. In GitHub Desktop: Fetch origin, dann Pull origin – danach noch einmal Rendern.",
       install: "Als App installieren", needApp: "Rendern auf dem PC geht in der installierten App (Claude-Desktop-App → Artefakt-Menü → Als App installieren)."
     }
   };
@@ -123,12 +123,44 @@
     const r = el("div", "row"); r.append(inp, ok); box.append(r);
   }
 
+  /* Play the best render on this PC (4K, then 1080p) instead of the 480p copy that ships with the
+     player. Same timeline, so questions and moments stay in sync. Falls back on any problem. */
+  let objectUrl = null, quality = null;
+  async function localSource(v) {
+    if (!desk?.fs) return;
+    const repo = LVP.store.get("local")?.repo || await findRepo();
+    if (!repo) return;
+    for (const [q, label] of [["k", "4K"], ["h", "1080p"]]) {
+      const f = join(repo, "build", "videos", `${v.id}_${q}.mp4`);
+      const st = await desk.fs.stat(f).catch(() => null);
+      if (!st || st.size > 3e9) continue;
+      const bytes = await desk.fs.readFile(f).catch(() => null);
+      if (!bytes || LVP.cur()?.id !== v.id) return;
+      const video = LVP.video, t = video.currentTime, wasPlaying = !video.paused, loaded = video.readyState > 0;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      objectUrl = URL.createObjectURL(new Blob([bytes], { type: "video/mp4" }));
+      const fallback = () => { video.removeEventListener("error", fallback); quality = null; showQuality(); video.src = v.file; video.currentTime = t; };
+      video.addEventListener("error", fallback, { once: true });
+      video.src = objectUrl;
+      video.addEventListener("loadedmetadata", () => { if (loaded) video.currentTime = t; if (wasPlaying) video.play().catch(() => {}); video.removeEventListener("error", fallback); }, { once: true });
+      quality = label; showQuality();
+      return;
+    }
+  }
+  function showQuality() {
+    let b = $("quality-badge");
+    if (!b) { b = el("span", "hint"); b.id = "quality-badge"; $("time")?.after(b); }
+    b.textContent = quality ? `${quality} ${T.fromPc}` : "";
+  }
+
   LVP.local = { render };
+  LVP.hooks.open.push((v) => { quality = null; showQuality(); localSource(v).catch(() => {}); });
   LVP.hooks.ready.push(async (c, fromAccount) => {
     if (fromAccount) return;
     course = c; T = S[(c.language || "en").slice(0, 2)] || S.en;
     desk = await LVP.use("desktop");
     if (desk?.os) sep = (await desk.os.platform().catch(() => "")) === "win32" ? "\\" : "/";
     render();
+    if (LVP.cur()) localSource(LVP.cur()).catch(() => {});
   });
 })();
