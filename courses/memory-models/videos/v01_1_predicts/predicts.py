@@ -247,7 +247,7 @@ class S1Curve(LessonScene):
         d10 = Dot(ax.c2p(10, recall_prob(10, 20)), color=PRIMARY, radius=0.07)
         d30 = Dot(ax.c2p(30, recall_prob(30, 20)), color=PRIMARY, radius=0.07)
         v10 = label("95 %", size=20, color=PRIMARY).next_to(d10, DOWN + LEFT, buff=0.08)
-        v30 = label("86 %", size=20, color=PRIMARY).next_to(d30, UP, buff=0.12)
+        v30 = label("86 %", size=20, color=PRIMARY).next_to(d30, DOWN, buff=0.12)
         with self.voiceover(
             'On this curve, <bookmark mark="a"/>ten days in you are at about ninety-five percent; '
             '<bookmark mark="b"/>thirty days in, about eighty-six.',
@@ -717,7 +717,7 @@ class S4Outro(LessonScene):
             "a seventy percent forecast expects you to remember, too.",
             hold="reveal",
         ):
-            self.play(f2.animate.set_opacity(0.85), run_time=0.4)
+            self.play(f2.animate.scale(1.04), run_time=0.4)
         many = label("× thousands of reviews", size=24, color=MUTED).next_to(res, DOWN, buff=0.35)
         with self.voiceover(
             '<bookmark mark="m"/>Over thousands of reviews a pattern would show. '

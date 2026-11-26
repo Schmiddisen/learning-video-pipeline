@@ -23,6 +23,7 @@ from manim import (
     Arrow,
     CurvedArrow,
     FadeIn,
+    FadeOut,
     GrowArrow,
     GrowFromEdge,
     Line,
