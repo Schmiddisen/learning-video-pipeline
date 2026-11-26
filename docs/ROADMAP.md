@@ -23,9 +23,10 @@ Roughly in order. ✓ = done.
   link back to the video; direct AnkiConnect bridge in the desktop app.
 - ✓ **One player for all courses** – a library in one artifact: course switcher, records per
   course, shared settings; `lvp-player --slug` adds a course from any repository.
-- ✓ **RWKV scheduler in the player** – the RWKV-7 memory model of srs-benchmark ported to
-  JavaScript (matches PyTorch to 1e-7), replays the review history (Anki's revlog or the
-  player's log) and orders reviews by the chance of forgetting.
+- ✓ **RWKV scheduler in the player** – RWKV-7 memory models ported to JavaScript: SM118 of the
+  RWKV Anki fork (default; matches its published test vectors to 5e-7) and the srs-benchmark
+  checkpoint (matches PyTorch to 1e-7). Replays the review history (Anki's revlog or the
+  player's log); live queue as RWKV-Instant in the fork, or a fixed daily queue.
 - ✓ **Labs** – designed per section by Claude (verified against their own solution), Python
   or JavaScript in the browser, graded hints, a lab tutor that runs code; authored labs.
 - ✓ **Exam practice** – interleaved across watched videos, graded report with rewatch links.

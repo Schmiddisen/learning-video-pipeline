@@ -37,9 +37,12 @@ Writes `build/player/`: `index.html`, `app.js`, `review.js`, `labs.js`, `exam.js
 `lab-worker.js`, `fsrs.js` (the page; ts-fsrs is bundled, MIT), `course.json` (timeline per video, cards linked to their moment,
 authored labs, the learner profile), `videos/*.mp4` (≤ 14 MB each) and `pyodide/` (Python
 for the labs, downloaded once; `--no-python` for JavaScript-only labs), `rwkv.js`,
-`rwkv-worker.js` and `rwkv_weights.wasm` (raw float32) + `rwkv_weights.json` (the RWKV memory model of
-open-spaced-repetition/srs-benchmark, downloaded once and converted without torch, ~11 MB;
-`--no-rwkv` to leave it out). Older builds work too: text, word timings and question times
+`rwkv-worker.js` and `rwkv_weights.wasm` (raw float32) + `rwkv_weights.json` (the RWKV memory
+model: by default SM118, the "Small" two-head model of the RWKV Anki fork JSchoreels/anki,
+~1.3 MB; `--rwkv-model srs-benchmark` for the srs-benchmark checkpoint, ~11 MB; downloaded once,
+hash-checked, converted without torch; `--no-rwkv` to leave it out). The weights are for the
+learner's own use only (trained on Anki's review dataset; shipping them in an app needs Anki's
+permission) – never commit or share them. Older builds work too: text, word timings and question times
 are reconstructed.
 
 ## 2. Publish as an artifact
