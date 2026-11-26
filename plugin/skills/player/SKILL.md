@@ -76,7 +76,13 @@ learner opens it). Tell the user:
   pending reviews go to Anki the next time it connects.
 - **Scheduler** (Review → settings): FSRS, or RWKV – a neural memory model that replays the
   whole review history (Anki's review log when Anki's decks are on) in a worker and shows the
-  cards most at risk first, at a chosen target recall; answers still go to Anki.
+  cards most at risk first, at a chosen target recall; answers still go to Anki. Due cards
+  are **live** by default, as RWKV-Instant in the RWKV Anki fork (JSchoreels/anki): eligible
+  while predicted recall ≤ target, lowest recall ÷ target first, a card returns only after 5
+  other answers and 30 s – the count is a snapshot and can fall faster than one per answer or
+  rise. **Fixed per day** is the alternative (built once a day; one fewer per answer). The
+  history replay follows the fork: graded revlog types 0–5 without cram (type 3, factor 0),
+  from each card's last fresh start.
 - dictation works on desktop Chromium and the desktop app.
 
 Re-run 1–2 (same URL) when videos change; the learner's progress is kept. Use the `coach`
