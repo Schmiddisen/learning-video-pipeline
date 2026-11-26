@@ -235,7 +235,7 @@ const icon = (name) => document.getElementById("icon-" + name).content.cloneNode
 function setPlayIcon() { $("play").replaceChildren(icon(video.paused ? "play" : "pause")); $("play").setAttribute("aria-label", video.paused ? "Play" : "Pause"); $("bigplay").hidden = !video.paused || !!cardBusy; }
 function togglePlay() { if (cardBusy?.blocking) return; video.paused ? video.play().catch(() => {}) : video.pause(); }
 $("play").onclick = togglePlay; $("bigplay").onclick = togglePlay; video.addEventListener("click", togglePlay);
-video.addEventListener("play", () => { if (strokes.length) clearInk(); setDrawMode(false); if (cardBusy && !cardBusy.blocking) closeCard(); setPlayIcon(); loop(); });
+video.addEventListener("play", () => { if (strokes.length) clearInk(); setDrawMode(false); setPlayIcon(); loop(); });
 video.addEventListener("pause", () => { setPlayIcon(); if (cur) { prog().pos = video.currentTime; saveProg(cur.id, true); } updateCtxLine(); });
 video.addEventListener("ended", () => { setPlayIcon(); if (!cur) return; prog().furthest = cur.duration; saveProg(cur.id, true); refreshPanels(); if (!prog().explain) openExplain(); });
 $("back").onclick = () => seekTo(video.currentTime - 10);
@@ -275,7 +275,7 @@ function tick() {
   $("time").textContent = `${fmt(t)} / ${fmt(cur.duration)}`;
   const p = prog();
   if (t > (p.furthest || 0) + 1) { p.furthest = t; p.pos = t; saveProg(); }
-  if (!video.paused && $("stop-at-q").checked && !cardBusy && t > lastT && t - lastT < 1.5) {
+  if (!video.paused && $("stop-at-q").checked && !cardBusy?.blocking && t > lastT && t - lastT < 1.5) {
     const q = cur.quizzes.find((x) => lastT < x.t + 0.4 && x.t + 0.4 <= t);
     if (q) { video.pause(); openQuiz(q); }
   }
@@ -507,7 +507,10 @@ const card = $("card");
 function closeCard() { cardBusy = null; card.hidden = true; card.textContent = ""; setPlayIcon(); }
 function openCardShell(kind, blocking) {
   cardBusy = { kind, blocking }; card.hidden = false; card.textContent = ""; setPlayIcon();
-  card.append(el("p", "kicker", kind));
+  const head = el("div", "row"); head.style.justifyContent = "space-between";
+  head.append(el("p", "kicker", kind));
+  if (!blocking) { const x = el("button", "iconbtn", "×"); x.setAttribute("aria-label", "Close"); x.onclick = closeCard; head.append(x); }
+  card.append(head);
   setTimeout(() => card.scrollIntoView({ block: "nearest", behavior: "smooth" }), 30);
   return card;
 }
