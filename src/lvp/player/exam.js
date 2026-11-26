@@ -44,7 +44,7 @@
       "Rules: interleave the videos (never two from the same video in a row); mix types – small computations, 'what happens if', classify an example, compare two ideas, explain why; each answerable in 1–4 sentences from what was taught; no definition recall; exam difficulty, not trick questions. Language of the narration.",
       'Reply with only JSON: {"questions": [{"q": "...", "a": "model answer", "video": "<video id from the ### headings>", "t": "m:ss where the narration teaches it", "points": 1-3}]}',
     ].join("\n");
-    const r = await sample.json(prompt, { cache: false });
+    const r = await sample.json(prompt, LVP.m("exam", { cache: false }));
     const qs = (r.questions || []).filter((x) => x && x.q).slice(0, n);
     if (!qs.length) throw { code: "invalid_json" };
     return qs.map((x) => ({ q: String(x.q), a: String(x.a || ""), video: String(x.video || ""), t: LVP.parseTs(x.t), points: Math.max(1, Math.min(3, Number(x.points) || 1)) }));
@@ -57,7 +57,7 @@
       "", "Reply with only JSON in the language of the questions, addressing the learner as you:",
       '{"results": [{"i": 0, "got": points earned (may be half points), "feedback": "1-2 sentences: what was right, what was missing"}], "summary": "2-3 sentences: the pattern in what went well and what to work on next"}',
     ].join("\n");
-    return LVP.sample().json(prompt, { cache: false });
+    return LVP.sample().json(prompt, LVP.m("exam", { cache: false }));
   }
 
   function render(box, state) {

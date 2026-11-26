@@ -81,13 +81,13 @@
       'Reply with only JSON. Code: {"type": "code", "title": "...", "goal": "what to do and why it matters, 2-4 sentences", "lang": "python" | "javascript", "starter": "...", "check": "...", "hints": ["...", "...", "..."], "solution": "..."}',
       'Steps: {"type": "steps", "title": "...", "goal": "...", "steps": [ ... ]}',
     ].filter(Boolean).join("\n");
-    let lab = await sample.json(prompt, { cache: false });
+    let lab = await sample.json(prompt, LVP.m("lab", { cache: false }));
     for (let attempt = 0; attempt < 2; attempt++) {
       const problem = await verify(lab);
       if (!problem) { lab.verified = true; return lab; }
       if (attempt === 1) break;
       // one repair round: show Claude exactly what failed
-      lab = await sample.json(prompt + "\n\nYour previous lab failed verification:\n" + problem + "\nPrevious lab:\n" + JSON.stringify(lab).slice(0, 12000) + "\nReturn the corrected lab, same JSON format.", { cache: false });
+      lab = await sample.json(prompt + "\n\nYour previous lab failed verification:\n" + problem + "\nPrevious lab:\n" + JSON.stringify(lab).slice(0, 12000) + "\nReturn the corrected lab, same JSON format.", LVP.m("lab", { cache: false }));
     }
     throw { code: "invalid_json" };
   }
@@ -169,7 +169,7 @@
               "Judge a learner's short answer to one step of a worked problem. Accept answers that are right in substance.",
               `Step: ${step.prompt}`, `Correct answer: ${step.answer}`, `Learner: ${rec.text}`,
               'Reply with only JSON in the language of the step: {"ok": true|false, "feedback": "one sentence"}',
-            ].join("\n"), { modelTier: "quick", cache: false });
+            ].join("\n"), LVP.m("grade", { cache: false }));
             ok = !!r.ok; fb.textContent = String(r.feedback || "");
           } catch (e) { fb.textContent = LVP.errText(e); }
           check.disabled = false;
@@ -286,7 +286,7 @@
       execute: async (input) => { const r = await exec(lab.lang, String(input.code || ""), 15000); return (r.out || "").slice(0, 4000) + (r.ok ? "" : "\n(exited with an error)"); },
     }] : undefined;
     try {
-      const opts = { onText: ({ text }) => { st.tutor = text; } };
+      const opts = LVP.m("labTutor", { onText: ({ text }) => { st.tutor = text; } });
       if (tools) opts.tools = tools; else opts.cache = false;
       const r = await sample(prompt, opts);
       st.tutor = r.text;

@@ -53,6 +53,8 @@ const STR = {
     ],
     winDictation: "Press Windows + H to dictate into this box.",
     backToVideo: "Back to the video", reviewNav: "Review",
+    models: "Models", modelNames: { auto: "Automatic", haiku: "Haiku (fast)", sonnet: "Sonnet", opus: "Opus (best)" },
+    tasks: { ask: "Ask (tutor chat)", grade: "Grading answers", practice: "New questions", explain: "Explain-back", lab: "Designing labs", labTutor: "Lab tutor", exam: "Exam practice", cards: "Writing and editing cards", link: "Linking Anki cards" },
     session: "Start a study session", sessionNext: "Reviews done – on to the video",
     skippedOne: "You jumped over a question – answer it now?", skippedMany: "questions jumped over – answer them now?",
     concepts: "How well you remember each concept", cardsSeen: "cards learned", practiseConcept: "Practise this concept now"
@@ -107,6 +109,8 @@ const STR = {
     ],
     winDictation: "Windows + H drücken, um in dieses Feld zu diktieren.",
     backToVideo: "Zurück zum Video", reviewNav: "Wiederholen",
+    models: "Modelle", modelNames: { auto: "Automatisch", haiku: "Haiku (schnell)", sonnet: "Sonnet", opus: "Opus (am besten)" },
+    tasks: { ask: "Fragen (Tutor-Chat)", grade: "Antworten bewerten", practice: "Neue Fragen", explain: "Zurückerklären", lab: "Labore entwerfen", labTutor: "Labor-Tutor", exam: "Klausurtraining", cards: "Karten schreiben und bearbeiten", link: "Anki-Karten verknüpfen" },
     session: "Lerneinheit starten", sessionNext: "Wiederholung erledigt – weiter zum Video",
     skippedOne: "Du hast eine Frage übersprungen – jetzt beantworten?", skippedMany: "Fragen übersprungen – jetzt beantworten?",
     concepts: "Wie gut du jedes Konzept behältst", cardsSeen: "Karten gelernt", practiseConcept: "Dieses Konzept jetzt üben"
@@ -372,6 +376,22 @@ function frameBlob() {
 const errText = (e) => LVP.L.errors[e?.code] || LVP.L.errors.other;
 LVP.errText = errText;
 LVP.sample = () => sample;
+/* one model choice per task, kept in the learner's account */
+const MODELS = { auto: {}, haiku: { model: "claude-haiku-5-5", modelTier: "quick" }, sonnet: { model: "claude-sonnet-5-5", modelTier: "default" }, opus: { model: "claude-opus-5-5", modelTier: "complex" } };
+const TASK_DEFAULTS = { ask: "auto", grade: "auto", practice: "auto", explain: "auto", lab: "auto", labTutor: "auto", exam: "auto", cards: "haiku", link: "haiku" };
+LVP.m = (task, extra = {}) => ({ ...extra, ...MODELS[(Store.get("models") || {})[task] || TASK_DEFAULTS[task] || "auto"] });
+function modelSettings() {
+  const L = LVP.L, d = el("details", "anki-more"); d.append(el("summary", null, L.models));
+  for (const task of Object.keys(TASK_DEFAULTS)) {
+    const row = el("label", "switch"); row.style.justifyContent = "space-between"; row.style.width = "100%";
+    const sel = el("select"); sel.id = "model-" + task;
+    for (const k of Object.keys(MODELS)) { const o = el("option", null, L.modelNames[k]); o.value = k; sel.append(o); }
+    sel.value = (Store.get("models") || {})[task] || TASK_DEFAULTS[task];
+    sel.onchange = () => { const m = { ...(Store.get("models") || { _key: "models" }) }; m[task] = sel.value; Store.set("models", m, true); };
+    row.append(document.createTextNode(L.tasks[task]), sel); d.append(row);
+  }
+  return d;
+}
 function learnerContext() {
   const lines = [];
   if (course.learner) lines.push("About the learner (their own profile):\n" + course.learner.slice(0, 1500));
@@ -468,7 +488,7 @@ async function ask(question) {
   $("ask-input").value = ""; $("ask-send").disabled = true; $("ask-stop").hidden = false;
   askCtl = new AbortController();
   const history = turns.slice(0, -1).filter((x) => x.content).slice(-9).map((x) => ({ role: x.role, content: x.content }));
-  const opts = { signal: askCtl.signal, images: blob ? [blob] : undefined, onText: ({ text }) => { renderRich(body, text); $("chat").scrollTop = $("chat").scrollHeight; } };
+  const opts = { ...LVP.m("ask"), signal: askCtl.signal, images: blob ? [blob] : undefined, onText: ({ text }) => { renderRich(body, text); $("chat").scrollTop = $("chat").scrollHeight; } };
   if (toolsOk && course.videos.length > 1) {
     opts.tools = [{
       name: "narration",
@@ -535,7 +555,7 @@ async function grade(q, answer, confidence) {
     '{"verdict": "right" | "partly" | "wrong", "feedback": "1-3 sentences in the language of the question: what exactly is right, what is missing or wrong. Address the learner as you.", "rewatch": "m:ss of the moment in the narration that explains what they missed, or null", "followup": {"q": "a different, short question on the same idea that they can answer now", "a": "its answer"} or null}',
     "Be fair: accept answers that are correct in substance even if worded differently. Give a followup only when the verdict is not right.",
   ].join("\n");
-  return sample.json(prompt, { cache: false });
+  return sample.json(prompt, LVP.m("grade", { cache: false }));
 }
 function openQuiz(q, opts = {}) {
   const L = LVP.L;
@@ -608,7 +628,7 @@ async function practice() {
     'Reply with only JSON: {"q": "...", "a": "the correct answer, 1-2 sentences"}',
   ].join("\n");
   try {
-    const r = await sample.json(prompt, { cache: false });
+    const r = await sample.json(prompt, LVP.m("practice", { cache: false }));
     closeCard(); openQuiz({ quiz: "practice", q: String(r.q), a: String(r.a || ""), t }, { free: true });
   } catch (e) { wait.textContent = errText(e); card.append(rowOf(Object.assign(el("button", "btn", "OK"), { onclick: closeCard }))); }
 }
@@ -635,7 +655,7 @@ function openExplain() {
       "At most 4 items per list. Missing means important for understanding, not every detail.",
     ].join("\n");
     try {
-      const res = await sample.json(prompt, { cache: false });
+      const res = await sample.json(prompt, LVP.m("explain", { cache: false }));
       wait.remove(); card.querySelector(".explain-result")?.remove(); card.append(renderExplain(res));
       prog().explain = { text, result: res, at: Date.now() }; saveProg(cur.id, true); LVP.refreshPanels?.();
     } catch (e) { wait.textContent = errText(e); }
@@ -696,7 +716,7 @@ async function openCardDraft(t, source) {
       "Draft ONE flashcard (spaced repetition) from this material, in its language. Prefer a 'why / what happens if' question over a definition; one idea only; answer in at most two short sentences.",
       `Course: ${course.title}; video: ${cur.title}.`, "Material:", ctx.slice(0, 6000),
       'Reply with only JSON: {"front": "...", "back": "..."}',
-    ].join("\n"), { modelTier: "quick", cache: false });
+    ].join("\n"), LVP.m("cards", { cache: false }));
     f.value = String(r.front || ""); b.value = String(r.back || "");
   } catch { f.value = ""; }
 }
@@ -819,6 +839,7 @@ LVP.panels.course = () => {
   }
   box.append(el("p", "hint", `${Math.round(100 * seen / (total || 1))} % ${L.watched}`));
   const local = el("div"); local.id = "local-box"; box.append(local); LVP.local?.render(local);
+  if (sample) box.append(modelSettings());
 };
 
 /* ---------- dictation ---------- */

@@ -13,6 +13,8 @@
       ankiMode: "Review with Anki's schedule", ankiSync: "Sync AnkiWeb", ankiPush: "Add missing cards to Anki", ankiPushed: "added",
       ankiMapped: "cards matched in Anki", ankiPending: "reviews waiting to go to Anki", ankiSent: "sent", install: "Install as app",
       explainMiss: "I forgot this flashcard. Explain the idea behind it so it sticks – briefly, with a different angle than the card.",
+      edit: "Edit with Claude", editTitle: "How should the card change?", editHow: "e.g. shorter, add an example, ask about the reason instead", editGo: "Rewrite", save: "Save", cancel: "Cancel", del: "Delete", delSure: "Really delete?",
+      deck: "Deck", colNew: "New", colLearn: "Learn", colDue: "Due", decks: "Decks", settings: "Anki and settings",
       dailyNew: "New cards per day", notify: "cards are due", videoQuestions: "Video questions",
       link: "Link my Anki cards to the videos", linkAgain: "Link new Anki cards", linked: "linked", linking: "Claude is linking", linkedNew: "cards linked to videos", linkReport: (d, all, n) => `${d} decks checked: ${all} cards are linked to their video moment (${n} new this time).`,
       linkHint: "Claude finds the decks that belong to this course and links each card to the moment that teaches it. New cards are linked automatically from then on."
@@ -26,6 +28,8 @@
       ankiMode: "Mit Ankis Zeitplan wiederholen", ankiSync: "AnkiWeb synchronisieren", ankiPush: "Fehlende Karten zu Anki hinzufügen", ankiPushed: "hinzugefügt",
       ankiMapped: "Karten in Anki gefunden", ankiPending: "Wiederholungen warten auf Anki", ankiSent: "übertragen", install: "Als App installieren",
       explainMiss: "Ich habe diese Karteikarte vergessen. Erklär die Idee dahinter so, dass sie hängen bleibt – kurz und aus einem anderen Blickwinkel als die Karte.",
+      edit: "Mit Claude bearbeiten", editTitle: "Wie soll sich die Karte ändern?", editHow: "z. B. kürzer, mit Beispiel, nach dem Grund fragen", editGo: "Umschreiben", save: "Speichern", cancel: "Abbrechen", del: "Löschen", delSure: "Wirklich löschen?",
+      deck: "Stapel", colNew: "Neu", colLearn: "Lernen", colDue: "Fällig", decks: "Stapel", settings: "Anki und Einstellungen",
       dailyNew: "Neue Karten pro Tag", notify: "Karten sind fällig", videoQuestions: "Fragen aus den Videos",
       link: "Meine Anki-Karten mit den Videos verknüpfen", linkAgain: "Neue Anki-Karten verknüpfen", linked: "verknüpft", linking: "Claude verknüpft", linkedNew: "Karten mit Videos verknüpft", linkReport: (d, all, n) => `${d} Stapel geprüft: ${all} Karten sind mit ihrer Stelle im Video verknüpft (${n} davon neu).`,
       linkHint: "Claude sucht die Stapel, die zu diesem Kurs gehören, und verknüpft jede Karte mit der Stelle, die sie erklärt. Neue Karten werden danach automatisch verknüpft."
@@ -49,7 +53,60 @@
   // the learner's own Anki notes that Claude linked to a video moment
   const links = () => { const l = store.get("anki-links"); if (l) { l.notes ||= {}; l.checked ||= []; return l; } store.data["anki-links"] = { _key: "anki-links", notes: {}, checked: [] }; return store.data["anki-links"]; };
   const linkedCards = () => Object.entries(links().notes).map(([nid, n]) => ({ id: "a-" + nid, deck: n.deck, front: n.front, back: n.back, cloze: n.cloze, extra: n.extra, video: n.video, t: n.t, tags: n.tags || [], anki: true }));
-  const allCards = () => [...(course?.cards || []), ...quizCards, ...mine().cards, ...linkedCards()];
+  const changes = () => { const c = store.get("card-changes"); if (c) { c.edited ||= {}; c.deleted ||= []; return c; } store.data["card-changes"] = { _key: "card-changes", edited: {}, deleted: [] }; return store.data["card-changes"]; };
+  const allCards = () => {
+    const ch = changes(), gone = new Set(ch.deleted);
+    return [...(course?.cards || []), ...quizCards, ...mine().cards, ...linkedCards()]
+      .filter((c) => !gone.has(c.id)).map((c) => (ch.edited[c.id] ? { ...c, ...ch.edited[c.id] } : c));
+  };
+  async function ankiNote(c) {   // the Anki note behind a card, when Anki is connected
+    const cards = anki.ok && anki.map[c.id]; if (!cards?.length) return null;
+    const [nid] = await anki.call("cardsToNotes", { cards: [cards[0]] }).catch(() => []);
+    return nid || null;
+  }
+  async function deleteCard(c) {
+    const ch = changes(); ch.deleted.push(c.id); store.set("card-changes", ch, true);
+    const nid = await ankiNote(c);
+    if (nid) await anki.call("deleteNotes", { notes: [nid] }).catch(() => {});
+    delete anki.map[c.id]; current = null; revealed = false; render(); LVP.updateDue();
+  }
+  async function saveEdit(c, fields) {
+    const ch = changes(); ch.edited[c.id] = fields; store.set("card-changes", ch, true);
+    const nid = await ankiNote(c);
+    if (nid) {
+      const [info] = await anki.call("notesInfo", { notes: [nid] }).catch(() => []);
+      const names = Object.entries(info?.fields || {}).sort((a, b) => a[1].order - b[1].order).map(([k]) => k);
+      const vals = fields.cloze != null ? [fields.cloze, fields.extra] : [fields.front, fields.back, fields.extra];
+      const upd = {}; names.forEach((k, i) => { if (vals[i] != null) upd[k] = String(vals[i]); });
+      if (Object.keys(upd).length) await anki.call("updateNoteFields", { note: { id: nid, fields: upd } }).catch(() => {});
+    }
+    render();
+  }
+  function editBox(c, f) {
+    const box = el("div", "verdict"); box.append(el("b", null, T.editTitle));
+    const how = el("textarea", "field"); how.placeholder = T.editHow; how.style.minHeight = "54px";
+    const go = el("button", "btn small primary", T.editGo), out = el("div");
+    go.onclick = async () => {
+      if (!how.value.trim()) return;
+      go.disabled = true; out.textContent = LVP.L.thinking;
+      const now = c.cloze ? { cloze: c.cloze, extra: c.extra || "" } : { front: c.front, back: c.back, extra: c.extra || "" };
+      try {
+        const r = await LVP.sample().json([
+          "Rewrite this flashcard as the learner asks. Keep it one idea, in its language; keep cloze markers {{c1::…}} if it has them.",
+          "Card: " + JSON.stringify(now), "Learner's request: " + how.value.trim(),
+          "Reply with only JSON with the same keys as the card.",
+        ].join("\n"), LVP.m("cards", { cache: false }));
+        out.textContent = "";
+        const prev = el("div", "flash"); prev.append(face({ ...c, ...r }, false), face({ ...c, ...r }, true)); out.append(prev);
+        const save = el("button", "btn small primary", T.save), no = el("button", "btn small", T.cancel);
+        save.onclick = () => saveEdit(c, Object.fromEntries(Object.keys(now).map((k) => [k, String(r[k] ?? now[k])])));
+        no.onclick = () => box.remove();
+        const row = el("div", "row"); row.append(save, no); out.append(row);
+      } catch (e) { out.textContent = LVP.errText(e); }
+      go.disabled = false;
+    };
+    box.append(how, go, out); return box;
+  }
   const plain = (s) => String(s || "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
   const norm = (s) => plain(s).toLowerCase().replace(/\{\{c\d+::([^}]*?)(::[^}]*)?\}\}/g, "$1").replace(/[^\p{L}\p{N}]+/gu, "").slice(0, 60);
 
@@ -59,12 +116,14 @@
     const reached = LVP.store.get("p-" + c.video)?.furthest || 0;
     return reached >= (c.t != null ? c.t + 5 : v.duration * 0.9);
   };
-  function queue() {
+  const inDeck = (c, deck) => !deck || c.deck === deck || (c.deck || "").startsWith(deck + "::");
+  function queue(deck = null) {
     const st = srs().cards, now = Date.now(), due = [], fresh = [];
-    let locked = 0;
+    let locked = 0, learning = 0;
     for (const c of allCards()) {
+      if (!inDeck(c, deck)) continue;
       const s = st[c.id];
-      if (s && s.state !== 0) { if (new Date(s.due).getTime() <= now) due.push(c); }
+      if (s && s.state !== 0) { if (new Date(s.due).getTime() <= now) { due.push(c); if (s.state !== 2) learning++; } }
       else if (unlocked(c)) fresh.push(c); else locked++;
     }
     due.sort((a, b) => new Date(st[a.id].due) - new Date(st[b.id].due));
@@ -73,7 +132,7 @@
       due.unshift(...extra.filter((c) => !(st[c.id].focusDone)));
     }
     const left = Math.max(0, settings().newPerDay - (srs().newDays[today()] || 0));
-    return { due, fresh: fresh.slice(0, left), locked, freshAll: fresh.length };
+    return { due, fresh: fresh.slice(0, left), locked, learning, freshAll: fresh.length };
   }
   LVP.review = {
     dueCount: () => { if (!course || !F) return 0; const q = queue(); return q.due.length + q.fresh.length; },
@@ -113,27 +172,54 @@
     } else box.textContent = back ? c.back : c.front;
     return box;
   }
+  let deckView = null;   // null: the deck list (like Anki's main screen); a deck name: studying it
+  function deckList(box) {
+    const names = [...new Set(allCards().map((c) => c.deck).filter(Boolean))];
+    const all = new Set();
+    for (const n of names) { const parts = n.split("::"); for (let i = 1; i <= parts.length; i++) all.add(parts.slice(0, i).join("::")); }
+    const table = el("div", "decks");
+    const head = el("div", "deckrow head"); head.append(el("span", null, T.deck), el("span", "n new", T.colNew), el("span", "n learn", T.colLearn), el("span", "n due", T.colDue)); table.append(head);
+    for (const d of [...all].sort()) {
+      const q = queue(d), depth = d.split("::").length - 1;
+      const row = el("button", "deckrow");
+      const name = el("span", "dname", d.split("::").pop()); name.style.paddingLeft = depth * 20 + "px";
+      const n = (v, cls) => el("span", "n " + cls + (v ? "" : " zero"), String(v));
+      row.append(name, n(q.fresh.length, "new"), n(q.learning, "learn"), n(q.due.length - q.learning, "due"));
+      row.onclick = () => { deckView = d; current = null; render(); };
+      table.append(row);
+    }
+    box.append(table);
+  }
   function render() {
     const box = $("review"); if (!box) return; box.textContent = "";
     if (!F) { box.append(el("p", "err", "FSRS library failed to load.")); return; }
-    const q = queue(), st = srs();
-    const stats = el("div", "stats");
-    const s = (n, label) => { const x = el("span"); x.append(el("b", null, String(n)), document.createTextNode(" " + label)); stats.append(x); };
-    s(q.due.length, T.due); s(q.fresh.length, T.newToday); s(q.locked, T.locked); s(allCards().length, T.total);
-    box.append(stats);
-    if (!current || !(q.due.includes(current) || q.fresh.includes(current))) { current = q.due[0] || q.fresh[0] || null; revealed = false; }
+    if (deckView === null) {
+      deckList(box);
+      const more = el("details", "anki-more"); more.append(el("summary", null, T.settings));
+      more.append(ankiPanel(), dailyRow()); box.append(more);
+      return;
+    }
+    const q = queue(deckView), st = srs();
+    const top = el("div", "row"); top.style.justifyContent = "space-between";
+    const back = el("button", "btn small", T.decks); back.onclick = () => { deckView = null; render(); };
+    const counts = el("span", "counts");
+    counts.append(el("span", "n new", String(q.fresh.length)), el("span", "n learn", String(q.learning)), el("span", "n due", String(q.due.length - q.learning)));
+    top.append(back, el("b", null, deckView.split("::").pop()), counts); box.append(top);
+    const same = current && [...q.due, ...q.fresh].find((x) => x.id === current.id);   // same card, maybe edited
+    if (same) current = same; else { current = q.due[0] || q.fresh[0] || null; revealed = false; }
     if (!current) {
       const d = el("div", "empty"); d.append(el("b", null, T.done), el("span", null, T.doneBody));
       const next = Object.values(st.cards).map((x) => new Date(x.due).getTime()).filter((t) => t > Date.now()).sort((a, b) => a - b)[0];
       if (next) d.append(el("span", null, `${T.nextIn}: ${new Date(next).toLocaleString()}`));
       if (LVP.session) { const go = el("button", "btn primary", LVP.L.sessionNext); go.onclick = () => LVP.continueSession(); d.append(go); }
+      const toDecks = el("button", "btn", T.decks); toDecks.onclick = () => { deckView = null; render(); }; d.append(toDecks);
       box.append(d);
     } else {
       const c = current, f = el("div", "flash");
       const head = el("div", "hint"); head.textContent = (c.deck || "") + (c.id.startsWith("m-") ? ` · ${T.mine}` : ""); f.append(head);
       const front = face(c, false); front.className = "front"; f.append(front);
       if (!revealed) {
-        const b = el("button", "btn primary", T.show); b.onclick = () => { revealed = true; render(); }; f.append(b);
+        const b = el("button", "btn primary", T.show + "  (Space)"); b.onclick = () => { revealed = true; render(); }; f.append(b);
         setTimeout(() => b.focus({ preventScroll: true }), 30);
       } else {
         if (!c.cloze) { const back = face(c, true); back.className = "back"; f.append(back); } else { front.replaceWith(Object.assign(face(c, true), { className: "front" })); }
@@ -141,24 +227,36 @@
         const acts = el("div", "row");
         if (c.video != null && c.t != null) { const w = el("button", "btn small", `${T.watch} ${fmt(c.t)}`); w.onclick = () => LVP.seek(c.video, Math.max(0, c.t - 3)); acts.append(w); }
         if (LVP.sample()) { const y = el("button", "btn small", T.why); y.onclick = () => whyCard(c); acts.append(y); }
+        if (LVP.sample()) { const e2 = el("button", "btn small", T.edit); e2.onclick = () => { if (!f.querySelector(".verdict")) f.insertBefore(editBox(c, f), acts.nextSibling); }; acts.append(e2); }
+        const del = el("button", "btn small", T.del);
+        del.onclick = () => { if (del.dataset.sure) deleteCard(c); else { del.dataset.sure = "1"; del.textContent = T.delSure; } };
+        acts.append(del);
         f.append(acts);
         const rates = el("div", "rates");
         const now = new Date(), card0 = st.cards[c.id] ? reviveCard(st.cards[c.id]) : F.createEmptyCard(now);
         const prev = fsrs.repeat(card0, now);
         [["again", 1], ["hard", 2], ["good", 3], ["easy", 4]].forEach(([k, g]) => {
-          const b = el("button", k); b.append(el("span", null, T[k]), el("small", null, span(prev[g].card.due - now)));
+          const b = el("button", k); b.append(el("span", null, `${g} · ${T[k]}`), el("small", null, span(prev[g].card.due - now)));
           b.onclick = () => rate(c, g); rates.append(b);
         });
         f.append(rates);
       }
       box.append(f);
     }
-    box.append(ankiPanel());
+  }
+  function dailyRow() {
     const set = settings(), row = el("label", "switch");
     const inp = el("input"); inp.type = "number"; inp.min = "0"; inp.max = "200"; inp.value = String(set.newPerDay); inp.style.width = "64px"; inp.id = "new-per-day";
     inp.onchange = () => { set.newPerDay = Math.max(0, Number(inp.value) || 0); store.set("review-settings", set, true); render(); LVP.updateDue(); };
-    row.append(document.createTextNode(T.dailyNew + " "), inp); box.append(row);
+    row.append(document.createTextNode(T.dailyNew + " "), inp); return row;
   }
+  // Anki's keys: Space/Enter shows the answer, then Space/Enter = Good; 1–4 rate
+  document.addEventListener("keydown", (e) => {
+    if (!document.body.classList.contains("review-mode") || deckView === null || !current) return;
+    if (e.target.matches("textarea, input, select") || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === " " || e.key === "Enter") { e.preventDefault(); e.stopImmediatePropagation(); if (!revealed) { revealed = true; render(); } else rate(current, 3); }
+    else if (revealed && ["1", "2", "3", "4"].includes(e.key)) { e.preventDefault(); e.stopImmediatePropagation(); rate(current, Number(e.key)); }
+  }, true);
   const span = (ms) => { if (!Number.isFinite(ms)) return "–"; const m = ms / 60000; if (m < 60) return `${Math.max(1, Math.round(m))} min`; const h = m / 60; if (h < 24) return `${Math.round(h)} h`; const d = h / 24; return d < 30 ? `${Math.round(d)} d` : `${(d / 30).toFixed(1)} mo`; };
   // a stored state the scheduler can work with (repairs states without stability, e.g. old imports)
   const reviveCard = (s) => {
@@ -326,7 +424,7 @@
         `Which of these Anki decks contain flashcards about the topics of the course "${course.title}"? Videos of the course:`,
         index, "", "Decks:", decks.map((d) => "- " + d).join("\n"),
         'Reply with only JSON: {"decks": ["exact deck name", ...]} – include a parent deck only if its own cards belong; [] if none.',
-      ].join("\n"), { cache: false, model: "claude-haiku-5-5", modelTier: "quick" });
+      ].join("\n"), LVP.m("link", { cache: false }));
       L.decks = (r.decks || []).filter((d) => decks.includes(d)); L.allDecks = decks;
       store.set("anki-links", L, true);
     }
@@ -355,7 +453,7 @@
           index, "",
           "Cards:", batch.map((n, k) => `${k}. ${(n.cloze || (n.front + " → " + n.back)).slice(0, 300)}`).join("\n"), "",
           'Reply with only JSON: {"links": [{"n": card number, "video": "video id" | null, "chapter": "m:ss" | null}]} – null when no video teaches it.',
-        ].join("\n"), { cache: false, model: "claude-haiku-5-5", modelTier: "quick" });
+        ].join("\n"), LVP.m("link", { cache: false }));
         for (const x of r.links || []) {
           const n = batch[Number(x.n)]; if (!n) continue;
           const v = course.videos.find((y) => y.id === x.video);

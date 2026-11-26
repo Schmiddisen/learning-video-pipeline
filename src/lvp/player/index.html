@@ -42,6 +42,16 @@ body.review-mode main > section:not(#review-page), body.review-mode aside { disp
 body.review-mode .flash { padding: 28px; }
 body.review-mode .flash .front { font-size: 22px; }
 body.review-mode .flash .back { font-size: 19px; }
+.decks { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); overflow: hidden; }
+.deckrow { display: grid; grid-template-columns: minmax(0, 1fr) 72px 72px 72px; align-items: center; gap: 8px; width: 100%; padding: 10px 16px; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; font: inherit; color: inherit; }
+.deckrow:hover { background: var(--sunk); }
+.deckrow.head { border-top: 0; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); cursor: default; }
+.deckrow.head:hover { background: none; }
+.deckrow .n, .counts .n { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.n.new { color: #3b82f6; } .n.learn { color: var(--bad); } .n.due { color: var(--good); } .n.zero { color: var(--muted); opacity: .5; font-weight: 400; }
+.counts { display: inline-flex; gap: 14px; }
+.anki-more summary { cursor: pointer; color: var(--muted); font-size: 14px; padding: 6px 0; }
+.anki-more[open] { display: grid; gap: 10px; }
 body {
   background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f-body);
   padding-left: max(16px, env(safe-area-inset-left, 0px));
