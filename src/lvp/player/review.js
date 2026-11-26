@@ -10,10 +10,11 @@
       why: "Why? Ask Claude", done: "Done for now.", doneBody: "New cards unlock when you reach the moment in the video that teaches them.",
       nextIn: "Next card due", mine: "yours", ankiTitle: "Anki", ankiOff: "To review in Anki itself, install this player as an app from the Claude desktop app (artifact menu → Install as app), with Anki and the AnkiConnect add-on running.",
       ankiConnect: "Connect to Anki", ankiChecking: "Looking for Anki…", ankiOn: "Connected to Anki", ankiNo: "Anki isn't answering. Start Anki with the AnkiConnect add-on (code 2055492159).",
-      ankiMode: "Review with Anki's schedule", ankiSync: "Sync AnkiWeb", ankiPush: "Add missing cards to Anki", ankiPushed: "added",
+      ankiMode: "Scheduling by Anki (FSRS – or RWKV if your Anki runs the RWKV fork)", rwkvHint: "RWKV: a small neural network that learns from your whole review history which card you are about to forget. Get it with JSchoreels' Anki fork (github.com/JSchoreels/anki); the player then follows its queue. Unchecked: the player schedules with FSRS itself.", ankiSync: "Sync AnkiWeb", ankiPush: "Add missing cards to Anki", ankiPushed: "added",
       ankiMapped: "cards matched in Anki", ankiPending: "reviews waiting to go to Anki", ankiSent: "sent", install: "Install as app",
       explainMiss: "I forgot this flashcard. Explain the idea behind it so it sticks – briefly, with a different angle than the card.",
       edit: "Edit with Claude", editTitle: "How should the card change?", editHow: "e.g. shorter, add an example, ask about the reason instead", editGo: "Rewrite", save: "Save", cancel: "Cancel", del: "Delete", delSure: "Really delete?",
+      fromAnki: "Decks and counts straight from Anki.",
       deck: "Deck", colNew: "New", colLearn: "Learn", colDue: "Due", decks: "Decks", settings: "Anki and settings",
       dailyNew: "New cards per day", notify: "cards are due", videoQuestions: "Video questions",
       link: "Link my Anki cards to the videos", linkAgain: "Link new Anki cards", linked: "linked", linking: "Claude is linking", linkedNew: "cards linked to videos", linkReport: (d, all, n) => `${d} decks checked: ${all} cards are linked to their video moment (${n} new this time).`,
@@ -25,10 +26,11 @@
       why: "Warum? Claude fragen", done: "Für jetzt erledigt.", doneBody: "Neue Karten werden frei, sobald du die Stelle im Video erreichst, die sie erklärt.",
       nextIn: "Nächste Karte fällig", mine: "eigene", ankiTitle: "Anki", ankiOff: "Um direkt in Anki zu wiederholen: den Player in der Claude-Desktop-App als App installieren (Artefakt-Menü → Als App installieren), Anki mit dem Add-on AnkiConnect geöffnet.",
       ankiConnect: "Mit Anki verbinden", ankiChecking: "Suche Anki …", ankiOn: "Mit Anki verbunden", ankiNo: "Anki antwortet nicht. Starte Anki mit dem Add-on AnkiConnect (Code 2055492159).",
-      ankiMode: "Mit Ankis Zeitplan wiederholen", ankiSync: "AnkiWeb synchronisieren", ankiPush: "Fehlende Karten zu Anki hinzufügen", ankiPushed: "hinzugefügt",
+      ankiMode: "Planung durch Anki (FSRS – oder RWKV, wenn dein Anki den RWKV-Fork nutzt)", rwkvHint: "RWKV: ein kleines neuronales Netz, das aus deinem ganzen Lernverlauf lernt, welche Karte du gleich vergisst. Zu bekommen über den Anki-Fork von JSchoreels (github.com/JSchoreels/anki); der Player folgt dann dessen Reihenfolge. Ohne Haken plant der Player selbst mit FSRS.", ankiSync: "AnkiWeb synchronisieren", ankiPush: "Fehlende Karten zu Anki hinzufügen", ankiPushed: "hinzugefügt",
       ankiMapped: "Karten in Anki gefunden", ankiPending: "Wiederholungen warten auf Anki", ankiSent: "übertragen", install: "Als App installieren",
       explainMiss: "Ich habe diese Karteikarte vergessen. Erklär die Idee dahinter so, dass sie hängen bleibt – kurz und aus einem anderen Blickwinkel als die Karte.",
       edit: "Mit Claude bearbeiten", editTitle: "Wie soll sich die Karte ändern?", editHow: "z. B. kürzer, mit Beispiel, nach dem Grund fragen", editGo: "Umschreiben", save: "Speichern", cancel: "Abbrechen", del: "Löschen", delSure: "Wirklich löschen?",
+      fromAnki: "Stapel und Zahlen direkt aus Anki.",
       deck: "Stapel", colNew: "Neu", colLearn: "Lernen", colDue: "Fällig", decks: "Stapel", settings: "Anki und Einstellungen",
       dailyNew: "Neue Karten pro Tag", notify: "Karten sind fällig", videoQuestions: "Fragen aus den Videos",
       link: "Meine Anki-Karten mit den Videos verknüpfen", linkAgain: "Neue Anki-Karten verknüpfen", linked: "verknüpft", linking: "Claude verknüpft", linkedNew: "Karten mit Videos verknüpft", linkReport: (d, all, n) => `${d} Stapel geprüft: ${all} Karten sind mit ihrer Stelle im Video verknüpft (${n} davon neu).`,
@@ -60,7 +62,7 @@
       .filter((c) => !gone.has(c.id)).map((c) => (ch.edited[c.id] ? { ...c, ...ch.edited[c.id] } : c));
   };
   async function ankiNote(c) {   // the Anki note behind a card, when Anki is connected
-    const cards = anki.ok && anki.map[c.id]; if (!cards?.length) return null;
+    const cards = anki.ok && (c.cardId ? [c.cardId] : anki.map[c.id]); if (!cards?.length) return null;
     const [nid] = await anki.call("cardsToNotes", { cards: [cards[0]] }).catch(() => []);
     return nid || null;
   }
@@ -190,8 +192,74 @@
     }
     box.append(table);
   }
+  /* ---- Anki as the source of truth (connected + "follow Anki's schedule"): Anki's decks,
+     counts and queue; every rating goes to Anki, which schedules it ---- */
+  const ankiLive = () => anki.ok && settings().ankiMode;
+  let aq = null;   // Anki queue for the open deck: [{cardId, kind}]
+  const q_ = (d) => `"deck:${d.replace(/"/g, "")}"`;
+  const byCardId = () => { const m = {}; for (const [id, cards] of Object.entries(anki.map)) for (const c of cards) m[c] = id; return m; };
+  async function deckStats(names) {
+    const ids = await anki.call("deckNamesAndIds");
+    const stats = await anki.call("getDeckStats", { decks: names }).catch(() => ({}));
+    return Object.fromEntries(names.map((n) => [n, stats[String(ids[n])] || {}]));
+  }
+  async function ankiDeckList(box) {
+    const names = (await anki.call("deckNames")).filter((d) => d !== "Default").sort();
+    const by = await deckStats(names);
+    const table = el("div", "decks");
+    const head = el("div", "deckrow head"); head.append(el("span", null, T.deck), el("span", "n new", T.colNew), el("span", "n learn", T.colLearn), el("span", "n due", T.colDue)); table.append(head);
+    for (const d of names) {
+      const x = by[d] || {}, depth = d.split("::").length - 1;
+      const row = el("button", "deckrow");
+      const name = el("span", "dname", d.split("::").pop()); name.style.paddingLeft = depth * 20 + "px";
+      const n = (v, cls) => el("span", "n " + cls + (v ? "" : " zero"), String(v || 0));
+      row.append(name, n(x.new_count, "new"), n(x.learn_count, "learn"), n(x.review_count, "due"));
+      row.onclick = () => { deckView = d; aq = null; current = null; revealed = false; render(); };
+      table.append(row);
+    }
+    box.textContent = ""; box.append(el("p", "hint", T.fromAnki), table);
+    const more = el("details", "anki-more"); more.append(el("summary", null, T.settings)); more.append(ankiPanel(), dailyRow()); box.append(more);
+  }
+  async function ankiNext(deck) {
+    // Anki's order: learning cards that are due, then reviews, then new cards (within Anki's daily limit)
+    const st = (await deckStats([deck]))[deck];
+    const learn = await anki.call("findCards", { query: `${q_(deck)} is:learn is:due` });
+    const due = await anki.call("findCards", { query: `${q_(deck)} is:review is:due -is:learn` });
+    const fresh = (st?.new_count || 0) ? await anki.call("findCards", { query: `${q_(deck)} is:new -is:suspended -is:buried` }) : [];
+    const ids = [...learn, ...due, ...fresh.slice(0, st?.new_count || 0)];
+    return { ids, counts: st || {} };
+  }
+  async function ankiStudy(box) {
+    const { ids, counts } = await ankiNext(deckView);
+    box.textContent = "";
+    const top = el("div", "row"); top.style.justifyContent = "space-between";
+    const back = el("button", "btn small", T.decks); back.onclick = () => { deckView = null; current = null; render(); };
+    const c3 = el("span", "counts"); c3.append(el("span", "n new", String(counts.new_count || 0)), el("span", "n learn", String(counts.learn_count || 0)), el("span", "n due", String(counts.review_count || 0)));
+    top.append(back, el("b", null, deckView.split("::").pop()), c3); box.append(top);
+    if (!ids.length) { const d = el("div", "empty"); d.append(el("b", null, T.done)); const b2 = el("button", "btn", T.decks); b2.onclick = back.onclick; d.append(b2); box.append(d); current = null; return; }
+    if (!current?.cardId || !ids.includes(current.cardId)) {
+      const [info] = await anki.call("cardsInfo", { cards: [ids[0]] });
+      const ours = allCards().find((c) => c.id === byCardId()[ids[0]]);
+      const f = Object.values(info.fields || {}).sort((a, b) => a.order - b.order).map((x) => x.value);
+      const isCloze = /\{\{c\d+::/.test(f[0] || "");
+      current = { ...(ours || {}), id: ours?.id || "anki-" + ids[0], cardId: ids[0], deck: info.deckName,
+        front: ours?.front ?? (isCloze ? null : plain(f[0])), back: ours?.back ?? (isCloze ? null : plain(f[1])),
+        cloze: ours?.cloze ?? (isCloze ? plain(f[0]) : null), extra: ours?.extra ?? plain(isCloze ? f[1] : f[2]) };
+      revealed = false;
+    }
+    studyCard(box, current, null);
+  }
+  async function rateAnki(c, grade) {
+    await anki.call("answerCards", { answers: [{ cardId: c.cardId, ease: grade }] }).catch(() => {});
+    // keep the player's own record in step, so the concept map and the coach see the review
+    if (c.id && !c.id.startsWith("anki-")) srs().log.push({ id: c.id, g: grade, at: new Date().toISOString(), sent: true });
+    current = null; revealed = false; render(); LVP.updateDue();
+  }
+
   function render() {
-    const box = $("review"); if (!box) return; box.textContent = "";
+    const box = $("review"); if (!box) return;
+    if (ankiLive()) { (deckView === null ? ankiDeckList(box) : ankiStudy(box)).catch((e) => { box.textContent = ""; box.append(el("p", "err", String(e?.message || e))); }); return; }
+    box.textContent = "";
     if (!F) { box.append(el("p", "err", "FSRS library failed to load.")); return; }
     if (deckView === null) {
       deckList(box);
@@ -214,8 +282,12 @@
       if (LVP.session) { const go = el("button", "btn primary", LVP.L.sessionNext); go.onclick = () => LVP.continueSession(); d.append(go); }
       const toDecks = el("button", "btn", T.decks); toDecks.onclick = () => { deckView = null; render(); }; d.append(toDecks);
       box.append(d);
-    } else {
-      const c = current, f = el("div", "flash");
+    } else studyCard(box, current, st);
+  }
+  // one card on screen; st = the player's own schedule (null when Anki schedules)
+  function studyCard(box, c, st) {
+    {
+      const f = el("div", "flash");
       const head = el("div", "hint"); head.textContent = (c.deck || "") + (c.id.startsWith("m-") ? ` · ${T.mine}` : ""); f.append(head);
       const front = face(c, false); front.className = "front"; f.append(front);
       if (!revealed) {
@@ -233,10 +305,10 @@
         acts.append(del);
         f.append(acts);
         const rates = el("div", "rates");
-        const now = new Date(), card0 = st.cards[c.id] ? reviveCard(st.cards[c.id]) : F.createEmptyCard(now);
-        const prev = fsrs.repeat(card0, now);
+        const now = new Date(), card0 = st && (st.cards[c.id] ? reviveCard(st.cards[c.id]) : F.createEmptyCard(now));
+        const prev = st ? fsrs.repeat(card0, now) : null;
         [["again", 1], ["hard", 2], ["good", 3], ["easy", 4]].forEach(([k, g]) => {
-          const b = el("button", k); b.append(el("span", null, `${g} · ${T[k]}`), el("small", null, span(prev[g].card.due - now)));
+          const b = el("button", k); b.append(el("span", null, `${g} · ${T[k]}`), el("small", null, prev ? span(prev[g].card.due - now) : ""));
           b.onclick = () => rate(c, g); rates.append(b);
         });
         f.append(rates);
@@ -282,6 +354,7 @@
     };
   }
   function rate(c, grade) {
+    if (ankiLive() && c.cardId) return rateAnki(c, grade);
     const st = srs(), now = new Date();
     const wasNew = !st.cards[c.id] || st.cards[c.id].state === 0;
     const res = fsrs.next(st.cards[c.id] ? reviveCard(st.cards[c.id]) : F.createEmptyCard(now), now, grade);
@@ -485,7 +558,7 @@
     box.append(el("span", "hint", `${anki.mapped}/${allCards().length} ${T.ankiMapped}` + (pending ? ` · ${pending} ${T.ankiPending}` : "")));
     const lab = el("label", "switch"); const cb = el("input"); cb.type = "checkbox"; cb.checked = !!settings().ankiMode; cb.id = "anki-mode";
     cb.onchange = async () => { const s = settings(); s.ankiMode = cb.checked; store.set("review-settings", s, true); if (cb.checked) { await anki.pull().catch(() => {}); } render(); LVP.updateDue(); };
-    lab.append(cb, document.createTextNode(" " + T.ankiMode)); box.append(lab);
+    lab.append(cb, document.createTextNode(" " + T.ankiMode)); box.append(lab, el("span", "hint", T.rwkvHint));
     const r = el("div", "row");
     const sync = el("button", "btn small", T.ankiSync); sync.onclick = async () => { sync.disabled = true; await anki.flush(); await anki.call("sync").catch(() => {}); if (settings().ankiMode) await anki.pull().catch(() => {}); sync.disabled = false; render(); LVP.updateDue(); };
     const push = el("button", "btn small", T.ankiPush); push.onclick = async () => { push.disabled = true; const n = await anki.push().catch(() => 0); anki.status = `${T.ankiOn} · ${n} ${T.ankiPushed}`; render(); };
