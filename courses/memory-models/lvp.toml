@@ -14,7 +14,7 @@ speed = 1.15              # applied locally, free to change
 chars_per_second = 15.0
 
 [budget]
-max_usd_per_run = 0.50    # paid narration per command; voice_cache/FROZEN blocks all spending
+max_usd_per_run = 1.50    # the OpenRouter key itself is capped at $2 for this course
 
 [pronunciation]
 # respellings for the voice only, e.g.  SQL = "sequel"   "e.g." = "for example"

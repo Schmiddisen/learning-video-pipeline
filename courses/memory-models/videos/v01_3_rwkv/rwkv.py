@@ -727,7 +727,7 @@ class S4CurveInstant(LessonScene):
         ax_c = Axes(x_range=[0, 30, 10], y_range=[0, 1, 0.5], x_length=5.2, y_length=3.0,
                     axis_config={"color": MUTED, "include_ticks": False})  # fmt: skip
         ax_c.move_to(LEFT * 3.4 + DOWN * 0.3)
-        curve = ax_c.plot(lambda t: 0.9 ** (t / 10), x_range=[0, 30], color=PRIMARY)
+        curve = ax_c.plot(lambda t: 0.9 ** (t / 6), x_range=[0, 30], color=PRIMARY)
         c_title = label("RWKV-Curve", size=30, color=PRIMARY, weight="BOLD").next_to(
             ax_c, UP, buff=0.5
         )
@@ -739,8 +739,8 @@ class S4CurveInstant(LessonScene):
             .next_to(dr, DOWN, buff=0.1)
             .align_to(dr, RIGHT)
         )
-        drop = DashedLine(ax_c.c2p(10, 0.9), ax_c.c2p(10, 0), color=ACCENT, stroke_width=2)
-        iv = label("interval", size=22, color=ACCENT).next_to(ax_c.c2p(10, 0), DOWN, buff=0.15)
+        drop = DashedLine(ax_c.c2p(6, 0.9), ax_c.c2p(6, 0), color=ACCENT, stroke_width=2)
+        iv = label("interval", size=22, color=ACCENT).next_to(ax_c.c2p(6, 0), DOWN, buff=0.15)
         with self.voiceover(
             "One model, two ways to ask it about a card.",
             hold="step",
@@ -839,7 +839,7 @@ class S4CurveInstant(LessonScene):
         self.checkpoint(
             "Two learners have the same history on one card,\nbut one has done 400 other reviews today.\n"
             "Can FSRS tell them apart? Can RWKV?",
-            "FSRS: no, it sees only that card's intervals and grades. RWKV: yes, it sees today's load.",
+            "FSRS: no – it sees only that card. RWKV: yes – it sees today's load.",
         )
 
 

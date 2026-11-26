@@ -1,4 +1,4 @@
-"""Video 1.1 – What a scheduler actually predicts: retrievability, stability, desired retention.  (sources: srs-benchmark README, Anki fork FAQ)"""
+"""Video 1.1 – What a scheduler actually predicts.  (srs-benchmark, Anki fork FAQ)"""
 
 # Beats
 #   S0  hook: two cards, both "due today" (S = 3 d seen 3 d ago; S = 20 d seen 60 d ago) –
@@ -16,7 +16,8 @@
 # numbers before the formula. Ending: cliffhanger into 1.2 (no metrics taught here).
 #
 # Numbers (FSRS-4.5+ curve, C = -0.5, F = 19/81): R(S) = (100/81)^-0.5 = 0.9;
-# interval(DR) = S · (DR^-2 - 1) · 81/19 → 0.95: 0.461 S, 0.8: 2.398 S, 0.99: 0.0866 S (1/0.0866 ≈ 11.6);
+# interval(DR) = S · (DR^-2 - 1) · 81/19 → 0.95: 0.461 S, 0.8: 2.398 S, 0.99: 0.0866 S;
+# 1/0.0866 ≈ 11.6 reviews as often;
 # R(60 d, S = 20 d) = 0.766; R(2S) = (119/81)^-0.5 = 0.825. FSRS-6 learns the decay and sets
 # F = 0.9^(-1/decay) - 1, so R(S) = 0.9 still holds.
 
@@ -25,14 +26,15 @@ from manim import (
     LEFT,
     RIGHT,
     UP,
+    UR,
     Arrow,
-    GrowArrow,
     Axes,
     Create,
     DashedLine,
     Dot,
     FadeIn,
     FadeOut,
+    GrowArrow,
     MathTex,
     Transform,
     VGroup,
@@ -99,14 +101,20 @@ class S0Hook(LessonScene):
         a = word_card("Hund", "dog", TEAL)
         b = word_card("Fernweh", "longing for far-off places", PRIMARY)
         cards = VGroup(a, b).arrange(RIGHT, buff=1.6).move_to(UP * 0.6)
-        head = label("today's queue", size=26, color=MUTED, slant="ITALIC").next_to(cards, UP, buff=0.6)
+        head = label("today's queue", size=26, color=MUTED, slant="ITALIC").next_to(
+            cards, UP, buff=0.6
+        )
         self.opening(SERIES, head)
         with self.voiceover(
             'Two cards are in <bookmark mark="q"/>today\'s review queue.', hold="step"
         ):
             self.at("q", FadeIn(cards, shift=UP * 0.1))
-        da = label("interval 3 days\nlast seen 3 days ago", size=22, color=FG).next_to(a, DOWN, buff=0.4)
-        db = label("interval 20 days\nlast seen 60 days ago", size=22, color=FG).next_to(b, DOWN, buff=0.4)
+        da = label("interval 3 days\nlast seen 3 days ago", size=22, color=FG).next_to(
+            a, DOWN, buff=0.4
+        )
+        db = label("interval 20 days\nlast seen 60 days ago", size=22, color=FG).next_to(
+            b, DOWN, buff=0.4
+        )
         with self.voiceover(
             '<bookmark mark="a"/>One came back after three days, right on time. '
             '<bookmark mark="b"/>The other was due forty days ago, while you were travelling.',
@@ -114,11 +122,9 @@ class S0Hook(LessonScene):
         ):
             self.at("a", FadeIn(da, shift=UP * 0.1))
             self.at("b", FadeIn(db, shift=UP * 0.1))
-        due = VGroup(*(label("due", size=26, color=ACCENT, weight="BOLD").next_to(c, UP, buff=0.15).shift(RIGHT * 0.9)
+        due = VGroup(*(label("due", size=26, color=ACCENT, weight="BOLD").next_to(c, UR, buff=0.1)
                        for c in (a, b)))  # fmt: skip
-        with self.voiceover(
-            'Anki shows both as <bookmark mark="d"/>due.', hold="step"
-        ):
+        with self.voiceover('Anki shows both as <bookmark mark="d"/>due.', hold="step"):
             self.at("d", FadeIn(due), FadeOut(head))
         with self.voiceover(
             "You make this call more often than you think – "
@@ -139,11 +145,13 @@ class S0Hook(LessonScene):
             say="Behind the word due sits one number. We'll draw it, "
             "turn it into a schedule, and see what FSRS can and can't use to compute it.",
         )
-        self.pretest([
-            "Desired retention goes from 90 % to 95 %.\n"
-            "Do intervals shrink by a few percent – or by about half?",
-            "You reviewed a card's reverse side yesterday.\nDoes FSRS use that for this card?",
-        ])
+        self.pretest(
+            [
+                "Desired retention goes from 90 % to 95 %.\n"
+                "Do intervals shrink by a few percent – or by about half?",
+                "You reviewed a card's reverse side yesterday.\nDoes FSRS use that for this card?",
+            ]
+        )
 
 
 class S1Curve(LessonScene):
@@ -156,10 +164,14 @@ class S1Curve(LessonScene):
             hold="step",
         ):
             self.at("c", FadeIn(card, shift=UP * 0.1))
-        rdef = VGroup(
-            label("retrievability", size=34, color=ACCENT, weight="BOLD"),
-            label("R = probability you'd recall it now", size=30),
-        ).arrange(DOWN, buff=0.2).next_to(card, DOWN, buff=0.7)
+        rdef = (
+            VGroup(
+                label("retrievability", size=34, color=ACCENT, weight="BOLD"),
+                label("R = probability you'd recall it now", size=30),
+            )
+            .arrange(DOWN, buff=0.2)
+            .next_to(card, DOWN, buff=0.7)
+        )
         with self.voiceover(
             "Nobody can know for sure. But a scheduler can put a probability on it, "
             '<bookmark mark="r"/>and that probability is called retrievability.',
@@ -168,7 +180,8 @@ class S1Curve(LessonScene):
             self.at("r", FadeIn(rdef, shift=UP * 0.1))
         fc = label(
             "R = 0.9: of many cards in this state,\nyou'd recall about nine in ten",
-            size=24, color=MUTED,
+            size=24,
+            color=MUTED,
         ).next_to(rdef, DOWN, buff=0.5)
         with self.voiceover(
             "Any single review ends as a yes or a no. "
@@ -181,21 +194,24 @@ class S1Curve(LessonScene):
         ax, deco = recall_axes()
         plot = VGroup(ax, deco).move_to(DOWN * 0.35 + LEFT * 1.6)
         self.clear_stage()
-        curve20 = ax.plot(lambda t: recall_prob(t, 20), x_range=[0, 60], color=PRIMARY, stroke_width=5)
+        curve20 = ax.plot(
+            lambda t: recall_prob(t, 20), x_range=[0, 60], color=PRIMARY, stroke_width=5
+        )
         with self.voiceover(
             '<bookmark mark="p"/>Now plot R against the days since your last review.',
             hold="step",
         ):
             self.at("p", FadeIn(plot))
         with self.voiceover(
-            '<bookmark mark="k"/>Right after a review it sits near one hundred percent, then slides '
-            "– steeply at first, then with a long, slow tail.",
+            '<bookmark mark="k"/>Right after a review it sits near one hundred percent, '
+            "then slides – steeply at first, then with a long, slow tail.",
             hold="reveal",
         ):
             self.at("k", Create(curve20), run_time=2.5)
         why = label(
             "power curve,\nnot exponential",
-            size=24, color=MUTED,
+            size=24,
+            color=MUTED,
         ).move_to(RIGHT * 5.0 + UP * 1.4)
         with self.voiceover(
             'FSRS uses a <bookmark mark="w"/>power curve here, not an exponential. '
@@ -208,7 +224,9 @@ class S1Curve(LessonScene):
         l90 = label("90 %", size=20, color=ACCENT).next_to(ax.c2p(0, 0.9), LEFT, buff=0.15)
         drop = DashedLine(ax.c2p(20, 0.9), ax.c2p(20, 0), color=PRIMARY, stroke_width=2)
         dot20 = Dot(ax.c2p(20, 0.9), color=PRIMARY, radius=0.09)
-        s20 = label("S = 20 days", size=26, color=PRIMARY, weight="BOLD").move_to(RIGHT * 4.9 + DOWN * 0.2)
+        s20 = label("S = 20 days", size=26, color=PRIMARY, weight="BOLD").move_to(
+            RIGHT * 4.9 + DOWN * 0.2
+        )
         with self.voiceover(
             "To compare cards you want one number for how durable a memory is. "
             'FSRS takes the day the curve crosses <bookmark mark="l"/>ninety percent, '
@@ -228,7 +246,7 @@ class S1Curve(LessonScene):
             self.at("h", FadeIn(half, shift=UP * 0.1))
         d10 = Dot(ax.c2p(10, recall_prob(10, 20)), color=PRIMARY, radius=0.07)
         d30 = Dot(ax.c2p(30, recall_prob(30, 20)), color=PRIMARY, radius=0.07)
-        v10 = label("95 %", size=20, color=PRIMARY).next_to(d10, UP, buff=0.12)
+        v10 = label("95 %", size=20, color=PRIMARY).next_to(d10, DOWN + LEFT, buff=0.08)
         v30 = label("86 %", size=20, color=PRIMARY).next_to(d30, UP, buff=0.12)
         with self.voiceover(
             'On this curve, <bookmark mark="a"/>ten days in you are at about ninety-five percent; '
@@ -245,10 +263,20 @@ class S1Curve(LessonScene):
             "squeezed.",
             hold="reveal",
         ):
-            self.at("t", Create(curve3), FadeIn(dot3), FadeIn(s3), FadeOut(half), FadeOut(d10, v10, d30, v30), run_time=1.5)
-        formula = MathTex(
-            r"R(t) = \left(1 + \tfrac{19}{81}\cdot\tfrac{t}{S}\right)^{-1/2}", color=FG
-        ).scale(0.9).move_to(RIGHT * 4.6 + DOWN * 2.2)
+            self.at(
+                "t",
+                Create(curve3),
+                FadeIn(dot3),
+                FadeIn(s3),
+                FadeOut(half),
+                FadeOut(d10, v10, d30, v30),
+                run_time=1.5,
+            )
+        formula = (
+            MathTex(r"R(t) = \left(1 + \tfrac{19}{81}\cdot\tfrac{t}{S}\right)^{-1/2}", color=FG)
+            .scale(0.9)
+            .move_to(RIGHT * 4.6 + DOWN * 2.2)
+        )
         with self.voiceover(
             "Every card's curve is one shape, stretched: "
             '<bookmark mark="f"/>R depends only on t divided by S.',
@@ -256,12 +284,16 @@ class S1Curve(LessonScene):
         ):
             self.at("f", FadeIn(formula, shift=UP * 0.1))
         self.clear_stage()
-        big = MathTex(
-            r"R(t) = \left(1 + \tfrac{19}{81}\cdot\tfrac{t}{S}\right)^{-1/2}", color=FG
-        ).scale(1.2).move_to(UP * 1.4)
-        check = MathTex(
-            r"R(S) = \left(\tfrac{100}{81}\right)^{-1/2} = \tfrac{9}{10}", color=ACCENT
-        ).scale(1.2).next_to(big, DOWN, buff=0.8)
+        big = (
+            MathTex(r"R(t) = \left(1 + \tfrac{19}{81}\cdot\tfrac{t}{S}\right)^{-1/2}", color=FG)
+            .scale(1.2)
+            .move_to(UP * 1.4)
+        )
+        check = (
+            MathTex(r"R(S) = \left(\tfrac{100}{81}\right)^{-1/2} = \tfrac{9}{10}", color=ACCENT)
+            .scale(1.2)
+            .next_to(big, DOWN, buff=0.8)
+        )
         with self.voiceover(
             "This is the curve FSRS has used since version four point five. "
             '<bookmark mark="z"/>Put in t equal to S: you get a hundred over eighty-one, '
@@ -273,7 +305,8 @@ class S1Curve(LessonScene):
         six = label(
             "FSRS-6: the exponent is learned from your data;\n"
             "the 19/81 is adjusted so R(S) stays 90 %",
-            size=24, color=MUTED,
+            size=24,
+            color=MUTED,
         ).next_to(check, DOWN, buff=0.8)
         with self.voiceover(
             '<bookmark mark="six"/>FSRS-6 also learns the exponent from your reviews, and adjusts '
@@ -285,9 +318,15 @@ class S1Curve(LessonScene):
         self.clear_stage()
         ax2, deco2 = recall_axes()
         plot2 = VGroup(ax2, deco2).move_to(DOWN * 0.35)
-        c_old = ax2.plot(lambda t: recall_prob(t, 10), x_range=[0, 60], color=PRIMARY, stroke_width=5)
-        c_new = ax2.plot(lambda t: recall_prob(t, 30), x_range=[0, 60], color=POSITIVE, stroke_width=5)
-        c_lap = ax2.plot(lambda t: recall_prob(t, 2), x_range=[0, 60], color=NEGATIVE, stroke_width=5)
+        c_old = ax2.plot(
+            lambda t: recall_prob(t, 10), x_range=[0, 60], color=PRIMARY, stroke_width=5
+        )
+        c_new = ax2.plot(
+            lambda t: recall_prob(t, 30), x_range=[0, 60], color=POSITIVE, stroke_width=5
+        )
+        c_lap = ax2.plot(
+            lambda t: recall_prob(t, 2), x_range=[0, 60], color=NEGATIVE, stroke_width=5
+        )
         good = label("Good: S grows", size=26, color=POSITIVE).move_to(UP * 2.9 + RIGHT * 2.5)
         again = label("Again: S shrinks", size=26, color=NEGATIVE).next_to(good, DOWN, buff=0.2)
         with self.voiceover(
@@ -311,8 +350,12 @@ class S2Rule(LessonScene):
         self.chapter("2", "From a curve to a due date")
         ax, deco = recall_axes()
         plot = VGroup(ax, deco).move_to(DOWN * 0.35 + LEFT * 1.6)
-        curve = ax.plot(lambda t: recall_prob(t, 10), x_range=[0, 60], color=PRIMARY, stroke_width=5)
-        stab = label("S = 10 days", size=26, color=PRIMARY, weight="BOLD").move_to(RIGHT * 4.9 + UP * 2.4)
+        curve = ax.plot(
+            lambda t: recall_prob(t, 10), x_range=[0, 60], color=PRIMARY, stroke_width=5
+        )
+        stab = label("S = 10 days", size=26, color=PRIMARY, weight="BOLD").move_to(
+            RIGHT * 4.9 + UP * 2.4
+        )
         with self.voiceover(
             '<bookmark mark="c"/>A curve on its own schedules nothing. '
             "You still have to decide when the card comes back.",
@@ -334,7 +377,9 @@ class S2Rule(LessonScene):
             return VGroup(h, v, d)
 
         m90 = marker(0.9, ACCENT)
-        dr_lab = label("desired retention", size=26, color=ACCENT, weight="BOLD").move_to(RIGHT * 4.9 + UP * 1.2)
+        dr_lab = label("desired retention", size=26, color=ACCENT, weight="BOLD").move_to(
+            RIGHT * 4.9 + UP * 1.2
+        )
         with self.voiceover(
             "The natural answer: pick a recall level you're willing to accept, "
             '<bookmark mark="m"/>and review when the curve gets down to it.',
@@ -419,7 +464,9 @@ class S2Rule(LessonScene):
         ):
             self.at("r", FadeIn(dr_r, shift=UP * 0.1))
             self.at("c", FadeIn(dr_c, shift=UP * 0.1))
-        note = label("per-card desired retention: video 1.4", size=24, color=MUTED).to_edge(DOWN, buff=0.9)
+        note = label("per-card desired retention: video 1.4", size=24, color=MUTED).to_edge(
+            DOWN, buff=0.9
+        )
         with self.voiceover(
             "Some experimental Anki builds already set the level per card from rules like these – "
             '<bookmark mark="n"/>video one point four comes back to that.',
@@ -428,14 +475,26 @@ class S2Rule(LessonScene):
             self.at("n", FadeIn(note))
 
         self.clear_stage()
-        pred = Card(VGroup(label("predictor", size=30, color=PRIMARY, weight="BOLD"),
-                           label("R for this card, now", size=24)).arrange(DOWN, buff=0.12), PRIMARY)
-        rule = Card(VGroup(label("rule", size=30, color=ACCENT, weight="BOLD"),
-                           label("review when R hits DR", size=24)).arrange(DOWN, buff=0.12), ACCENT)
+        pred = Card(
+            VGroup(
+                label("predictor", size=30, color=PRIMARY, weight="BOLD"),
+                label("R for this card, now", size=24),
+            ).arrange(DOWN, buff=0.12),
+            PRIMARY,
+        )
+        rule = Card(
+            VGroup(
+                label("rule", size=30, color=ACCENT, weight="BOLD"),
+                label("review when R hits DR", size=24),
+            ).arrange(DOWN, buff=0.12),
+            ACCENT,
+        )
         date = label("due date", size=30, weight="BOLD")
         VGroup(pred, rule, date).arrange(RIGHT, buff=1.2).move_to(UP * 0.3)
-        arrows = VGroup(Arrow(pred.get_right(), rule.get_left(), buff=0.1, color=MUTED),
-                        Arrow(rule.get_right(), date.get_left(), buff=0.1, color=MUTED))  # fmt: skip
+        arrows = VGroup(
+            Arrow(pred.get_right(), rule.get_left(), buff=0.1, color=MUTED),
+            Arrow(rule.get_right(), date.get_left(), buff=0.1, color=MUTED),
+        )
         with self.voiceover(
             "Notice what moving the dial did not change: the curve. "
             '<bookmark mark="p"/>The prediction stays put; '
@@ -458,9 +517,7 @@ class S2Rule(LessonScene):
         hook = VGroup(a, b).arrange(RIGHT, buff=1.2).move_to(UP * 1.4)
         ra = label("R = 90 %", size=40, color=TEAL, weight="BOLD").next_to(a, DOWN, buff=0.5)
         rb = label("R ≈ 77 %", size=40, color=NEGATIVE, weight="BOLD").next_to(b, DOWN, buff=0.5)
-        with self.voiceover(
-            '<bookmark mark="h"/>Now the two cards from the start.', hold="step"
-        ):
+        with self.voiceover('<bookmark mark="h"/>Now the two cards from the start.', hold="step"):
             self.at("h", FadeIn(hook, shift=UP * 0.1))
         with self.voiceover(
             '<bookmark mark="a"/>The three-day card sits exactly at ninety percent: due, on time. '
@@ -487,7 +544,8 @@ class S2Rule(LessonScene):
             self.play(b.animate.scale(1.08), rb.animate.scale(1.08), run_time=0.6)
         self.checkpoint(
             "Card A: stability 4 days, last seen 8 days ago.\n"
-            "Card B: stability 40 days, last seen 80 days ago.\nWhich are you more likely to recall?",
+            "Card B: stability 40 days, last seen 80 days ago.\n"
+            "Which are you more likely to recall?",
             "Neither: both are at t = 2S, and R depends only on t/S (≈ 82 % each)",
         )
 
@@ -495,11 +553,15 @@ class S2Rule(LessonScene):
 class S3Fsrs(LessonScene):
     def construct(self) -> None:
         self.chapter("3", "FSRS: a curve built by hand")
-        rules = VGroup(
-            label("after Good: how much does S grow?", size=26),
-            label("after Again: how far does S fall?", size=26),
-            label("how do difficulty and current R change both?", size=26),
-        ).arrange(DOWN, aligned_edge=LEFT, buff=0.3).move_to(UP * 1.4)
+        rules = (
+            VGroup(
+                label("after Good: how much does S grow?", size=26),
+                label("after Again: how far does S fall?", size=26),
+                label("how do difficulty and current R change both?", size=26),
+            )
+            .arrange(DOWN, aligned_edge=LEFT, buff=0.3)
+            .move_to(UP * 1.4)
+        )
         with self.voiceover(
             "So where does S come from, and how does it move after each review?",
             hold="step",
@@ -513,10 +575,14 @@ class S3Fsrs(LessonScene):
         ):
             self.at("b", FadeIn(rules[1], shift=UP * 0.1))
             self.at("c", FadeIn(rules[2], shift=UP * 0.1))
-        params = VGroup(
-            Card(label("FSRS-6: 21 numbers", size=28, color=PRIMARY), PRIMARY),
-            Card(label("FSRS-7: 34 numbers", size=28, color=PRIMARY), PRIMARY),
-        ).arrange(RIGHT, buff=0.8).next_to(rules, DOWN, buff=0.7)
+        params = (
+            VGroup(
+                Card(label("FSRS-6: 21 numbers", size=28, color=PRIMARY), PRIMARY),
+                Card(label("FSRS-7: 34 numbers", size=28, color=PRIMARY), PRIMARY),
+            )
+            .arrange(RIGHT, buff=0.8)
+            .next_to(rules, DOWN, buff=0.7)
+        )
         with self.voiceover(
             "The structure is fixed. What's left open is a short list of numbers: "
             '<bookmark mark="s"/>twenty-one in FSRS-6, <bookmark mark="v"/>thirty-four in FSRS-7.',
@@ -575,13 +641,15 @@ class S3Fsrs(LessonScene):
             ("l", "your 300th review today – and you're tired"),
             ("t", "how long you hesitated before answering"),
         ]
-        items = VGroup(*(VGroup(cross(size=0.28), label(txt, size=26, color=MUTED)).arrange(RIGHT, buff=0.3)
+        items = VGroup(*(VGroup(cross(size=0.28), label(txt, size=26, color=MUTED))
                          for _, txt in unseen))  # fmt: skip
+        for row in items:
+            row.arrange(RIGHT, buff=0.3)
         items.arrange(DOWN, aligned_edge=LEFT, buff=0.3).next_to(sees, DOWN, buff=0.6)
         with self.voiceover("That's all it gets.", hold="step"):
             self.play(sees.animate.set_color(ACCENT), run_time=0.4)
         with self.voiceover(
-            "It doesn't know <bookmark mark=\"s\"/>you reviewed the reverse card yesterday, "
+            'It doesn\'t know <bookmark mark="s"/>you reviewed the reverse card yesterday, '
             '<bookmark mark="d"/>which deck the card sits in, '
             '<bookmark mark="l"/>or that this is your three hundredth review today.',
             hold="reveal",
@@ -631,7 +699,9 @@ class S4Outro(LessonScene):
             self.at("c", FadeIn(card, shift=UP * 0.1))
             self.at("a", FadeIn(f1, shift=UP * 0.1))
             self.at("b", FadeIn(f2, shift=UP * 0.1))
-        res = VGroup(tick(size=0.4), label("you press Good", size=30, color=POSITIVE)).arrange(RIGHT, buff=0.3)
+        res = VGroup(tick(size=0.4), label("you press Good", size=30, color=POSITIVE)).arrange(
+            RIGHT, buff=0.3
+        )
         res.next_to(fc, DOWN, buff=0.7)
         with self.voiceover('<bookmark mark="g"/>You press Good.', hold="step"):
             self.at("g", FadeIn(res, shift=UP * 0.1), run_time=0.4)
@@ -642,12 +712,13 @@ class S4Outro(LessonScene):
         ):
             self.play(f2.animate.set_opacity(0.85), run_time=0.4)
         with self.voiceover(
-            "Over thousands of reviews a pattern would show. "
-            "But what exactly would you count?",
+            "Over thousands of reviews a pattern would show. But what exactly would you count?",
             hold="reveal",
         ):
             self.play(f1.animate.set_opacity(0.85), run_time=0.4)
-        last = label("how would you know whose guess is better?", size=32, color=ACCENT, weight="BOLD")
+        last = label(
+            "how would you know whose guess is better?", size=32, color=ACCENT, weight="BOLD"
+        )
         last.to_edge(DOWN, buff=0.9)
         with self.voiceover(
             "So with millions of reviews and two models, "
@@ -656,9 +727,13 @@ class S4Outro(LessonScene):
         ):
             self.at("h", FadeIn(last, shift=UP * 0.1))
         self.clear_stage()
-        self.recall([
-            "A card's stability doubles after a review.\n"
-            "Same desired retention – what happens to its next interval?",
-            "A friend sets desired retention to 99 %.\nWhat happens to her workload, and why so much?",
-            "Name two things that could change your recall\nof a card today that FSRS never sees.",
-        ])
+        self.recall(
+            [
+                "A card's stability doubles after a review.\n"
+                "Same desired retention – what happens to its next interval?",
+                "A friend sets desired retention to 99 %.\n"
+                "What happens to her workload, and why so much?",
+                "Name two things that could change your recall\n"
+                "of a card today that FSRS never sees.",
+            ]
+        )
