@@ -275,7 +275,8 @@ class S1Curve(LessonScene):
         formula = (
             MathTex(r"R(t) = \left(1 + \tfrac{19}{81}\cdot\tfrac{t}{S}\right)^{-1/2}", color=FG)
             .scale(0.9)
-            .move_to(RIGHT * 4.6 + DOWN * 2.2)
+            .scale_to_fit_width(3.5)
+            .move_to(RIGHT * 5.0 + DOWN * 1.6)
         )
         with self.voiceover(
             "Every card's curve is one shape, stretched: "
@@ -575,6 +576,12 @@ class S3Fsrs(LessonScene):
         ):
             self.at("b", FadeIn(rules[1], shift=UP * 0.1))
             self.at("c", FadeIn(rules[2], shift=UP * 0.1))
+        with self.voiceover(
+            "Difficulty is a second number each card carries, from one to ten: "
+            "the harder the card, the less a success stretches its stability.",
+            hold="reveal",
+        ):
+            self.play(rules[2].animate.set_color(ACCENT), run_time=0.4)
         params = (
             VGroup(
                 Card(label("FSRS-6: 21 numbers", size=28, color=PRIMARY), PRIMARY),
@@ -711,11 +718,13 @@ class S4Outro(LessonScene):
             hold="reveal",
         ):
             self.play(f2.animate.set_opacity(0.85), run_time=0.4)
+        many = label("× thousands of reviews", size=24, color=MUTED).next_to(res, DOWN, buff=0.35)
         with self.voiceover(
-            "Over thousands of reviews a pattern would show. But what exactly would you count?",
+            '<bookmark mark="m"/>Over thousands of reviews a pattern would show. '
+            "But what exactly would you count?",
             hold="reveal",
         ):
-            self.play(f1.animate.set_opacity(0.85), run_time=0.4)
+            self.at("m", FadeIn(many, shift=UP * 0.1))
         last = label(
             "how would you know whose guess is better?", size=32, color=ACCENT, weight="BOLD"
         )

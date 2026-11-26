@@ -214,8 +214,8 @@ class S1Window(Lesson):
         head = label("FSRS-7, users 1–300", size=30, weight="BOLD").to_edge(UP, buff=1.0)
         with self.voiceover(
             "How much of Instant's lead is that window? "
-            '<bookmark mark="h"/>Someone tested it with FSRS-7 itself, on the first three '
-            "hundred users.",
+            "The FAQ of an experimental Anki fork reports a test "
+            '<bookmark mark="h"/>with FSRS-7 itself, on the first three hundred users.',
             hold="step",
         ):
             self.at("h", FadeIn(head), FadeIn(src))
@@ -224,11 +224,7 @@ class S1Window(Lesson):
         live = bar_row("updated up to review", 0.3269, TEAL, x0=x0).shift(UP * 0.1)
         frozen = bar_row("frozen after last review", 0.3519, MUTED, "≈ normal", x0=x0)
         frozen.shift(DOWN * 0.9)
-        with self.voiceover(
-            "This is an experiment reported in an Anki fork's FAQ – "
-            "we could not check it ourselves.",
-            hold="none",
-        ):
+        with self.voiceover("We could not check it ourselves, so hold it loosely.", hold="none"):
             pass
         with self.voiceover(
             'There, <bookmark mark="a"/>normal FSRS-7 scored zero point three five two.',
@@ -411,10 +407,9 @@ class S2Fairness(Lesson):
             '<bookmark mark="q"/>whether the benchmark model had the leak is an open question.',
             hold="reveal",
         ):
-            self.play(
-                VGroup(row, miss, arrow, means, leak).animate.scale(0.75).to_edge(LEFT, buff=0.6)
-            )
-            status.next_to(VGroup(row, miss, arrow, means, leak), RIGHT, buff=0.6)
+            leak_all = VGroup(row, miss, arrow, means, leak)
+            self.play(FadeOut(extra, inputs), leak_all.animate.shift(UP * 1.7), run_time=0.6)
+            status.next_to(leak_all, DOWN, buff=0.5)
             self.at("q", FadeIn(status, shift=LEFT * 0.1))
         with self.voiceover(
             "And how much such a leak would move the score has not been measured, "
@@ -498,7 +493,7 @@ class S3IntoAnki(Lesson):
             "its curve becomes an interval in days, with Anki's load balancer and fuzz on top.",
             hold="step",
         ):
-            self.at("c", FadeIn(cal, shift=LEFT * 0.1), opts[2].animate.scale(1.08))
+            self.at("c", FadeIn(cal, shift=LEFT * 0.1))
         inst = VGroup(
             label("Instant → order by recall right now", size=26, color=ACCENT),
             label("+ fallback due dates (FSRS or Curve)", size=22, color=MUTED),
@@ -509,7 +504,7 @@ class S3IntoAnki(Lesson):
             "it sorts your cards by how likely you are to recall them right now.",
             hold="step",
         ):
-            self.at("i", FadeIn(inst[0], shift=LEFT * 0.1), opts[3].animate.scale(1.08))
+            self.at("i", FadeIn(inst[0], shift=LEFT * 0.1))
         with self.voiceover(
             "But sync, statistics and phones need due dates, "
             '<bookmark mark="f"/>so a fallback calculator – FSRS or Curve – writes them.',
@@ -637,6 +632,12 @@ class S3IntoAnki(Lesson):
             hold="insight",
         ):
             self.at("r", FadeIn(needs, lag_ratio=0.15))
+        with self.voiceover(
+            "The author frames the fork as a test bench for scheduler ideas in daily use, "
+            "not as a better Anki.",
+            hold="step",
+        ):
+            self.play(needs.animate.set_color(MUTED), run_time=0.5)
         self.checkpoint(
             "A new model scores best on exactly the cards\n"
             'whose deck input reads "missing". What do you suspect?',
@@ -743,7 +744,7 @@ class S4Convince(Lesson):
         self.checkpoint(
             "Your preset uses RWKV-Instant, and you review\n"
             "on your phone during a train ride.\nWhat decides which cards are due there?",
-            "Fallback due dates – the phone schedules with FSRS-6, no live ordering",
+            "The fallback due dates; new intervals come from FSRS-6, no live ordering",
         )
 
         model = Card("model", color=PRIMARY).move_to(LEFT * 3.2 + UP * 0.6)
