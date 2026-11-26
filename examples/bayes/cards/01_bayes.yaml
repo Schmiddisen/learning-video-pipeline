@@ -27,3 +27,12 @@ cards:
     tags: [v1.2, formula]
     front: "In P(sick | +) = P(+ | sick) · P(sick) / P(+), what do top and bottom count?"
     back: The top counts the sick who test positive, the bottom everyone who tests positive.
+
+  - id: b-prosecutor-swap
+    tags: [v1.3, base-rate]
+    front: "A trace matches 1 in a million people. Why is that not the chance that a matching suspect is innocent?"
+    back: "It is P(match | innocent). The court needs P(innocent | match), which also depends on how many people could have left the trace."
+  - id: b-city-count
+    tags: [v1.3, counting]
+    front: "City of 5 million, random-match rate 1 in a million, no other evidence. Chance a matching suspect is the culprit?"
+    back: "About 5 innocent matches + 1 culprit: roughly 1 in 6."

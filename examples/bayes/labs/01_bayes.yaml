@@ -89,3 +89,35 @@ labs:
         kind: text
         answer: "It started from much higher odds (about 1 : 10 instead of 1 : 999), and the same factor 99 multiplies them."
         hint: "Same test, different starting point."
+
+  - video: v1.3
+    title: How many could have left the trace?
+    goal: |
+      Work out what a DNA match means for different pools of possible culprits – the step the
+      prosecutor skipped.
+    steps:
+      - prompt: "City of 5 000 000, random-match rate 1 in 1 000 000: how many innocent people match by chance?"
+        kind: number
+        answer: "5"
+        calc: "5_000_000 / 1_000_000"
+        tol: 0.01
+        example: true
+        explain: "One in a million of five million: five."
+      - prompt: "With the culprit, who also matches: chance in percent that a matching person is the culprit?"
+        kind: number
+        answer: "16.7"
+        calc: "100 * 1 / (5 + 1)"
+        tol: 0.02
+        hint: "Culprits among all who match."
+        explain: "1 of 6 matches: about 16.7 %."
+      - prompt: "Other evidence narrows the pool to 1000 possible people. Chance in percent now?"
+        kind: number
+        answer: "99.9"
+        calc: "100 * 1 / (1000 / 1_000_000 + 1)"
+        tol: 0.01
+        hint: "Innocent matches among 1000 people: 1000 × 1/1 000 000."
+        explain: "0.001 expected innocent matches next to 1 culprit: about 99.9 %."
+      - prompt: "In one sentence: what did the other evidence change – the match rate or the starting odds?"
+        kind: text
+        answer: "The starting odds: it shrinks the pool of possible culprits; the match rate stays one in a million."
+        hint: "Which number did you change between step 2 and step 3?"
