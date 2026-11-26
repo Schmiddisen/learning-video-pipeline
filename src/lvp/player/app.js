@@ -21,7 +21,7 @@ const STR = {
     addCard: "Add to my cards", cardAdded: "Added to your cards – it shows up in Review.",
     chips: ["Explain this differently", "Give me a concrete example", "Why does this matter?", "What did I just miss?"],
     socratic: "Guide me, don't tell me",
-    emptyTitle: "Pause anywhere and ask.",
+    emptyTitle: "Pause anywhere and ask. Mark circles something on the picture first.",
     emptyBody: "Claude sees the picture, what was just said, the whole video and how you are doing. Press Mark to circle something first.",
     thinking: "Thinking…", claude: "Claude", at: "at", marked: "your marking", picture: "picture", saveNote: "Save as note", toCard: "Make a card",
     resumed: "Resumed at", startOver: "Start over",
@@ -51,6 +51,7 @@ const STR = {
       "Lab: a hands-on task for the current part, with checks and hints.",
       "Today: what to do next, your weak spots and exam practice.",
     ],
+    winDictation: "Press Windows + H to dictate into this box.",
     session: "Start a study session", sessionNext: "Reviews done – on to the video",
     skippedOne: "You jumped over a question – answer it now?", skippedMany: "questions jumped over – answer them now?",
     concepts: "How well you remember each concept", cardsSeen: "cards learned", practiseConcept: "Practise this concept now"
@@ -73,7 +74,7 @@ const STR = {
     addCard: "Zu meinen Karten", cardAdded: "Hinzugefügt – die Karte erscheint unter Wiederholen.",
     chips: ["Erklär das anders", "Gib mir ein konkretes Beispiel", "Wozu brauche ich das?", "Was habe ich gerade verpasst?"],
     socratic: "Führ mich hin, verrat nichts",
-    emptyTitle: "Halte irgendwo an und frag.",
+    emptyTitle: "Halte irgendwo an und frag. Mit Markieren kreist du vorher etwas im Bild ein.",
     emptyBody: "Claude sieht das Bild, was gerade gesagt wurde, das ganze Video und wie es bei dir läuft. Mit Markieren kannst du vorher etwas einkreisen.",
     thinking: "Denkt nach …", claude: "Claude", at: "bei", marked: "deine Markierung", picture: "Bild", saveNote: "Als Notiz", toCard: "Karte daraus",
     resumed: "Fortgesetzt bei", startOver: "Von vorn",
@@ -103,6 +104,7 @@ const STR = {
       "Labor: eine praktische Aufgabe zum aktuellen Abschnitt, mit Prüfungen und Hinweisen.",
       "Heute: was als Nächstes dran ist, deine Schwachstellen und Klausurtraining.",
     ],
+    winDictation: "Windows + H drücken, um in dieses Feld zu diktieren.",
     session: "Lerneinheit starten", sessionNext: "Wiederholung erledigt – weiter zum Video",
     skippedOne: "Du hast eine Frage übersprungen – jetzt beantworten?", skippedMany: "Fragen übersprungen – jetzt beantworten?",
     concepts: "Wie gut du jedes Konzept behältst", cardsSeen: "Karten gelernt", practiseConcept: "Dieses Konzept jetzt üben"
@@ -229,7 +231,8 @@ function showResume(pos) {
 }
 
 /* ---------- transport ---------- */
-function setPlayIcon() { $("play").innerHTML = video.paused ? "&#9654;" : "&#10074;&#10074;"; $("bigplay").hidden = !video.paused || !!cardBusy; }
+const icon = (name) => document.getElementById("icon-" + name).content.cloneNode(true);
+function setPlayIcon() { $("play").replaceChildren(icon(video.paused ? "play" : "pause")); $("play").setAttribute("aria-label", video.paused ? "Play" : "Pause"); $("bigplay").hidden = !video.paused || !!cardBusy; }
 function togglePlay() { if (cardBusy?.blocking) return; video.paused ? video.play().catch(() => {}) : video.pause(); }
 $("play").onclick = togglePlay; $("bigplay").onclick = togglePlay; video.addEventListener("click", togglePlay);
 video.addEventListener("play", () => { if (strokes.length) clearInk(); setDrawMode(false); if (cardBusy && !cardBusy.blocking) closeCard(); setPlayIcon(); loop(); });
@@ -253,7 +256,8 @@ function noteSkipped(from, to) {
     box.append(b);
   }
 }
-$("full").onclick = () => { (document.fullscreenElement ? document.exitFullscreen() : stage.requestFullscreen()).catch(() => {}); };
+$("full").onclick = () => { (document.fullscreenElement ? document.exitFullscreen() : $("player").requestFullscreen()).catch(() => {}); };
+document.addEventListener("fullscreenchange", () => { const on = !!document.fullscreenElement; $("full-on").hidden = on; $("full-off").hidden = !on; $("full").setAttribute("aria-label", on ? "Exit full screen" : "Full screen"); });
 document.addEventListener("keydown", (e) => {
   if (e.target.matches("textarea, input, select")) return;
   if (e.key === " " || e.key === "k") { e.preventDefault(); togglePlay(); }
@@ -290,7 +294,7 @@ function buildMarks() {
 
 /* ---------- transcript ---------- */
 function buildTranscript() {
-  const box = $("transcript"); box.textContent = "";
+  const box = $("transcript"); if (!box) return; box.textContent = "";
   const items = [
     ...cur.chapters.map((c) => ({ t: c.t, kind: "chapter", c })),
     ...cur.lines.map((l, i) => ({ t: l.t, kind: "line", l, i })),
@@ -307,7 +311,7 @@ function buildTranscript() {
   activeLine = -1;
 }
 function highlight(t) {
-  const i = lineAt(t), box = $("transcript");
+  const i = lineAt(t), box = $("transcript"); if (!box) return;
   if (i !== activeLine) {
     box.querySelector(".line.now")?.classList.remove("now");
     const prev = box.querySelector(`.line[data-i="${activeLine}"] .txt`);
@@ -438,8 +442,8 @@ function renderChat() {
   const box = $("chat"); box.textContent = "";
   const turns = chats[cur?.id] || [];
   if (!turns.length) {
-    const e = el("div", "empty"); e.append(el("b", null, LVP.L.emptyTitle), el("span", null, sampleChecked && !sample ? LVP.L.unavailable : LVP.L.emptyBody));
-    const ul = el("ul", "list-plain"); for (const tip of LVP.L.tour) ul.append(el("li", null, tip)); e.append(ul);
+    const e = el("div", "empty"); e.append(el("b", null, LVP.L.emptyTitle));
+    if (sampleChecked && !sample) e.append(el("span", null, LVP.L.unavailable));
     box.append(e);
   }
   for (const m of turns) box.append(m.node);
@@ -802,6 +806,7 @@ LVP.panels.course = () => {
     b.append(left, bar); b.onclick = () => openVideo(v.id); box.append(b);
   }
   box.append(el("p", "hint", `${Math.round(100 * seen / (total || 1))} % ${L.watched}`));
+  const local = el("div"); local.id = "local-box"; box.append(local); LVP.local?.render(local);
 };
 
 /* ---------- dictation ---------- */
@@ -828,7 +833,7 @@ function dictate(target, btn) {
   dict.start().catch(() => {});   // straight from the click – nothing awaited before it
 }
 function micFor(target) {
-  const b = el("button", "iconbtn micbtn"); b.innerHTML = "&#127908;"; b.setAttribute("aria-pressed", "false"); b.title = "Dictate";
+  const b = el("button", "iconbtn micbtn"); b.append(icon("mic")); b.setAttribute("aria-pressed", "false"); b.setAttribute("aria-label", "Dictate");
   b.hidden = !dict; b.onclick = () => dictate(target, b); return b;
 }
 

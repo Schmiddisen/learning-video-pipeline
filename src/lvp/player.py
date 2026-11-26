@@ -311,6 +311,20 @@ def _pyodide(dst: Path) -> bool:
     return True
 
 
+def _render_command() -> str:
+    """How the installed player starts the final render on the learner's PC (no questions)."""
+    import tomllib
+
+    py = ROOT / "pyproject.toml"
+    scripts = (
+        tomllib.loads(py.read_text(encoding="utf-8")).get("project", {}).get("scripts", {})
+        if py.exists()
+        else {}
+    )
+    menu = next((name for name, target in scripts.items() if target.endswith("menu:main")), "lvp")
+    return f"uv run {menu}"
+
+
 def _encode(src: Path, dst: Path, duration: float, max_mb: float) -> None:
     """H.264 + AAC that starts playing at once (faststart) and stays below max_mb."""
     dst.parent.mkdir(parents=True, exist_ok=True)
@@ -363,7 +377,8 @@ def main(argv: list[str] | None = None) -> int:
     labs = labs_for(labs_dir, videos) if labs_dir.exists() else []
     python = not args.no_python and _pyodide(OUT / "pyodide")
     course = {"format": FORMAT, "title": title, "language": s.language, "videos": videos,
-              "cards": cards, "labs": labs, "learner": learner, "python": python}  # fmt: skip
+              "cards": cards, "labs": labs, "learner": learner, "python": python,
+              "repo": ROOT.name, "render": _render_command()}  # fmt: skip
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "course.json").write_text(json.dumps(course, ensure_ascii=False), encoding="utf-8")
     for f in PAGE.iterdir():

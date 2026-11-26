@@ -85,32 +85,51 @@ def _choose(title: str, options: list[str], default: int = 1) -> int:
         print("  Please enter a number from the list.")
 
 
-def main() -> int:
+QUALITY_KEYS = {"4k60": 0, "4k30": 1, "1080p": 2, "480p": 3}
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Interactive menu; with --quality it runs without questions (the study player's
+    'Render on this PC' button uses that)."""
+    import argparse
+
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
+    ap = argparse.ArgumentParser(description="Render final videos (cached narration only).")
+    ap.add_argument("--quality", choices=list(QUALITY_KEYS), help="run without questions")
+    ap.add_argument("--videos", default="a", help="12, 4-7, v2, 4,6 or a (default: all)")
+    ap.add_argument("--redo", action="store_true", help="also render videos that already exist")
+    args = ap.parse_args(sys.argv[1:] if argv is None else argv)
     videos = _videos()
     if not videos:
         print("No videos found (videos/vNN_name/name.py).")
         return 1
-    q = _choose("Quality?", [name for name, _ in QUALITIES])
+    q = (
+        QUALITY_KEYS[args.quality]
+        if args.quality
+        else _choose("Quality?", [name for name, _ in QUALITIES])
+    )
     flags = QUALITIES[q][1]
-    print("\nWhich videos?  (✓ = already rendered in this quality)")
-    last = ""
-    for i, (f, name) in enumerate(videos, 1):
-        if _lecture(name) != last:
-            last = _lecture(name)
-            print(f"  -- Part {last} --")
-        mark = "✓" if _output(f, flags).exists() else " "
-        print(f"  {mark} {i:2d}) {name}")
-    print("  Enter: number (12), range (4-7), part (v2), several (4,6) or a = all")
-    while True:
-        try:
-            chosen = _pick(input(f"Choice [{len(videos)}]: ") or str(len(videos)), videos)
-            break
-        except ValueError:
-            print("  Not recognised – e.g. 12, 4-7, v2, 4,6 or a.")
+    if args.quality:
+        chosen = _pick(args.videos, videos)
+    else:
+        print("\nWhich videos?  (✓ = already rendered in this quality)")
+        last = ""
+        for i, (f, name) in enumerate(videos, 1):
+            if _lecture(name) != last:
+                last = _lecture(name)
+                print(f"  -- Part {last} --")
+            mark = "✓" if _output(f, flags).exists() else " "
+            print(f"  {mark} {i:2d}) {name}")
+        print("  Enter: number (12), range (4-7), part (v2), several (4,6) or a = all")
+        while True:
+            try:
+                chosen = _pick(input(f"Choice [{len(videos)}]: ") or str(len(videos)), videos)
+                break
+            except ValueError:
+                print("  Not recognised – e.g. 12, 4-7, v2, 4,6 or a.")
     done = [i for i in chosen if _output(videos[i][0], flags).exists()]
-    if (
+    if (args.quality and not args.redo) or (
         len(chosen) > 1
         and done
         and input("Skip already rendered ones? [Y/n]: ").strip().lower() in ("", "j", "y")
@@ -138,7 +157,7 @@ def main() -> int:
         for name, rc, dt in results:
             print(f"  {'✓' if rc == 0 else '✗'} {name}  ({dt / 60:.0f} min)")
     ok = all(rc == 0 for _, rc, _ in results)
-    if ok and len(chosen) == 1 and os.name == "nt":
+    if ok and len(chosen) == 1 and os.name == "nt" and not args.quality:
         out = _output(videos[chosen[0]][0], flags)
         if out.exists() and input("\nOpen the video? [Y/n]: ").strip().lower() in ("", "j", "y"):
             os.startfile(out)  # noqa: S606 - opens the rendered file

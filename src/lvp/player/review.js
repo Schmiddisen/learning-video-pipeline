@@ -13,7 +13,9 @@
       ankiMode: "Review with Anki's schedule", ankiSync: "Sync AnkiWeb", ankiPush: "Add missing cards to Anki", ankiPushed: "added",
       ankiMapped: "cards matched in Anki", ankiPending: "reviews waiting to go to Anki", ankiSent: "sent", install: "Install as app",
       explainMiss: "I forgot this flashcard. Explain the idea behind it so it sticks – briefly, with a different angle than the card.",
-      dailyNew: "New cards per day", notify: "cards are due", videoQuestions: "Video questions"
+      dailyNew: "New cards per day", notify: "cards are due", videoQuestions: "Video questions",
+      link: "Link my Anki cards to the videos", linkAgain: "Link new Anki cards", linked: "linked", linking: "Claude is linking", linkedNew: "cards linked to videos",
+      linkHint: "Claude finds the decks that belong to this course and links each card to the moment that teaches it. New cards are linked automatically from then on."
     },
     de: {
       title: "Wiederholen", due: "fällig", newToday: "neu heute", locked: "werden beim Schauen freigeschaltet", total: "Karten",
@@ -24,7 +26,9 @@
       ankiMode: "Mit Ankis Zeitplan wiederholen", ankiSync: "AnkiWeb synchronisieren", ankiPush: "Fehlende Karten zu Anki hinzufügen", ankiPushed: "hinzugefügt",
       ankiMapped: "Karten in Anki gefunden", ankiPending: "Wiederholungen warten auf Anki", ankiSent: "übertragen", install: "Als App installieren",
       explainMiss: "Ich habe diese Karteikarte vergessen. Erklär die Idee dahinter so, dass sie hängen bleibt – kurz und aus einem anderen Blickwinkel als die Karte.",
-      dailyNew: "Neue Karten pro Tag", notify: "Karten sind fällig", videoQuestions: "Fragen aus den Videos"
+      dailyNew: "Neue Karten pro Tag", notify: "Karten sind fällig", videoQuestions: "Fragen aus den Videos",
+      link: "Meine Anki-Karten mit den Videos verknüpfen", linkAgain: "Neue Anki-Karten verknüpfen", linked: "verknüpft", linking: "Claude verknüpft", linkedNew: "Karten mit Videos verknüpft",
+      linkHint: "Claude sucht die Stapel, die zu diesem Kurs gehören, und verknüpft jede Karte mit der Stelle, die sie erklärt. Neue Karten werden danach automatisch verknüpft."
     }
   };
   let T = S.en, course = null, fsrs = null, current = null, revealed = false, focusIds = null;
@@ -42,7 +46,10 @@
       if (q.quiz === "check" && q.a) quizCards.push({ id: `q-${v.id}-${i}`, deck: `${course.title}::${T.videoQuestions}`, front: q.q, back: q.a, video: v.id, t: Math.max(0, q.t - 1), tags: ["video-question"] });
     });
   };
-  const allCards = () => [...(course?.cards || []), ...quizCards, ...mine().cards];
+  // the learner's own Anki notes that Claude linked to a video moment
+  const links = () => { const l = store.get("anki-links"); if (l) { l.notes ||= {}; l.checked ||= []; return l; } store.data["anki-links"] = { _key: "anki-links", notes: {}, checked: [] }; return store.data["anki-links"]; };
+  const linkedCards = () => Object.entries(links().notes).map(([nid, n]) => ({ id: "a-" + nid, deck: n.deck, front: n.front, back: n.back, cloze: n.cloze, extra: n.extra, video: n.video, t: n.t, tags: n.tags || [], anki: true }));
+  const allCards = () => [...(course?.cards || []), ...quizCards, ...mine().cards, ...linkedCards()];
   const plain = (s) => String(s || "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
   const norm = (s) => plain(s).toLowerCase().replace(/\{\{c\d+::([^}]*?)(::[^}]*)?\}\}/g, "$1").replace(/[^\p{L}\p{N}]+/gu, "").slice(0, 60);
 
@@ -134,7 +141,7 @@
         if (!c.cloze) { const back = face(c, true); back.className = "back"; f.append(back); } else { front.replaceWith(Object.assign(face(c, true), { className: "front" })); }
         if (c.extra) f.append(el("div", "extra", plain(c.extra)));
         const acts = el("div", "row");
-        if (c.video != null && c.t != null) { const w = el("button", "btn small", `▶ ${T.watch} ${fmt(c.t)}`); w.onclick = () => LVP.seek(c.video, Math.max(0, c.t - 3)); acts.append(w); }
+        if (c.video != null && c.t != null) { const w = el("button", "btn small", `${T.watch} ${fmt(c.t)}`); w.onclick = () => LVP.seek(c.video, Math.max(0, c.t - 3)); acts.append(w); }
         if (LVP.sample()) { const y = el("button", "btn small", T.why); y.onclick = () => whyCard(c); acts.append(y); }
         f.append(acts);
         const rates = el("div", "rates");
@@ -154,7 +161,7 @@
     inp.onchange = () => { set.newPerDay = Math.max(0, Number(inp.value) || 0); store.set("review-settings", set, true); render(); LVP.updateDue(); };
     row.append(document.createTextNode(T.dailyNew + " "), inp); box.append(row);
   }
-  const span = (ms) => { const m = ms / 60000; if (m < 60) return `${Math.max(1, Math.round(m))} min`; const h = m / 60; if (h < 24) return `${Math.round(h)} h`; const d = h / 24; return d < 30 ? `${Math.round(d)} d` : `${(d / 30).toFixed(1)} mo`; };
+  const span = (ms) => { if (!Number.isFinite(ms)) return "–"; const m = ms / 60000; if (m < 60) return `${Math.max(1, Math.round(m))} min`; const h = m / 60; if (h < 24) return `${Math.round(h)} h`; const d = h / 24; return d < 30 ? `${Math.round(d)} d` : `${(d / 30).toFixed(1)} mo`; };
   // a stored state the scheduler can work with (repairs states without stability, e.g. old imports)
   const reviveCard = (s) => {
     const c = { ...s, due: new Date(s.due), last_review: s.last_review ? new Date(s.last_review) : undefined };
@@ -217,8 +224,10 @@
       anki.status = T.ankiChecking; render();
       try {
         await anki.call("version"); anki.ok = true; anki.status = T.ankiOn;
+        if (!settings().ankiWanted) { const s = settings(); s.ankiWanted = true; store.set("review-settings", s, true); }
         await anki.match(); await anki.flush();
         if (settings().ankiMode) await anki.pull().catch(() => {});
+        if (links().done) anki.link(null, true).then((n) => { if (n) { anki.status = `${T.ankiOn} · ${n} ${T.linkedNew}`; render(); LVP.updateDue(); } }).catch(() => {});
       } catch { anki.ok = false; anki.status = T.ankiNo; }
       render();
     },
@@ -238,6 +247,7 @@
           }
         }
       }
+      for (const [nid, n] of Object.entries(links().notes)) if (n.cards?.length) anki.map["a-" + nid] = n.cards;
       anki.mapped = Object.keys(anki.map).length;
     },
     async flush() {
@@ -293,6 +303,77 @@
     },
   };
   const groupBy = (xs, f) => xs.reduce((m, x) => ((m[f(x)] ||= []).push(x), m), {});
+
+  /* Claude links the learner's existing Anki notes to the videos: it picks the decks that belong
+     to the course, then assigns each note a video and chapter; the exact moment comes from the
+     narration of that chapter. Already checked notes are skipped, so later runs only see new ones. */
+  const words = (t) => new Set((String(t).toLowerCase().match(/[\p{L}\p{N}]{4,}/gu) || []));
+  function bestMoment(video, chapterT, text) {
+    const v = course.videos.find((x) => x.id === video); if (!v) return null;
+    const ch = v.chapters.filter((c) => c.t <= (chapterT ?? -1) + 0.5).pop();
+    const next = ch ? v.chapters.find((c) => c.t > ch.t) : null;
+    const lines = v.lines.filter((l) => !ch || (l.t >= ch.t && (!next || l.t < next.t)));
+    const want = words(text);
+    let best = null, score = 0;
+    for (const l of lines) { let n = 0; for (const w of words(l.text)) if (want.has(w)) n++; if (n > score) { score = n; best = l; } }
+    return best ? best.t : (ch ? ch.t : 0);
+  }
+  anki.link = async (onProgress, quiet = false) => {
+    const sample = LVP.sample(); if (!sample || !anki.ok) return 0;
+    const L = links(), checked = new Set(L.checked);
+    const index = course.videos.map((v) => `${v.id}: ${LVP.videoLabel(v)}\n` + v.chapters.map((c) => `  ${fmt(c.t)} ${c.title}`).join("\n")).join("\n");
+    let decks = await anki.call("deckNames");
+    if (!L.decks) {
+      const r = await sample.json([
+        `Which of these Anki decks contain flashcards about the topics of the course "${course.title}"? Videos of the course:`,
+        index, "", "Decks:", decks.map((d) => "- " + d).join("\n"),
+        'Reply with only JSON: {"decks": ["exact deck name", ...]} – include a parent deck only if its own cards belong; [] if none.',
+      ].join("\n"), { cache: false });
+      L.decks = (r.decks || []).filter((d) => decks.includes(d));
+      store.set("anki-links", L, true);
+    }
+    const inCourse = new Set(Object.values(anki.map).flat());
+    const notes = [];
+    for (const d of L.decks) {
+      const ids = await anki.call("findNotes", { query: `"deck:${d.replace(/"/g, "")}" -"deck:${d.replace(/"/g, "")}::*"` }).catch(() => []);
+      const todo = ids.filter((id) => !checked.has(id));
+      for (let i = 0; i < todo.length; i += 200) {
+        for (const n of await anki.call("notesInfo", { notes: todo.slice(i, i + 200) })) {
+          if ((n.cards || []).some((c) => inCourse.has(c))) { checked.add(n.noteId); continue; }   // a course card already
+          const f = Object.values(n.fields || {}).sort((a, b) => a.order - b.order).map((x) => x.value);
+          const isCloze = /\{\{c\d+::/.test(f[0] || "");
+          notes.push({ id: n.noteId, deck: d, cards: n.cards, tags: n.tags || [], front: isCloze ? null : plain(f[0]), back: isCloze ? null : plain(f[1]), cloze: isCloze ? plain(f[0]) : null, extra: isCloze ? plain(f[1]) : plain(f[2]) });
+        }
+      }
+    }
+    let linked = 0;
+    for (let i = 0; i < notes.length; i += 30) {
+      const batch = notes.slice(i, i + 30);
+      onProgress?.(i, notes.length);
+      try {
+        const r = await sample.json([
+          `Link flashcards to the video of the course "${course.title}" that teaches them. Videos and their chapters (m:ss title):`,
+          index, "",
+          "Cards:", batch.map((n, k) => `${k}. ${(n.cloze || (n.front + " → " + n.back)).slice(0, 300)}`).join("\n"), "",
+          'Reply with only JSON: {"links": [{"n": card number, "video": "video id" | null, "chapter": "m:ss" | null}]} – null when no video teaches it.',
+        ].join("\n"), { cache: false });
+        for (const x of r.links || []) {
+          const n = batch[Number(x.n)]; if (!n) continue;
+          const v = course.videos.find((y) => y.id === x.video);
+          if (v) {
+            L.notes[n.id] = { video: v.id, t: bestMoment(v.id, LVP.parseTs(x.chapter), n.cloze || n.front + " " + n.back), deck: n.deck, cards: n.cards, tags: n.tags, front: n.front, back: n.back, cloze: n.cloze, extra: n.extra };
+            anki.map["a-" + n.id] = n.cards; linked++;
+          }
+        }
+        for (const n of batch) checked.add(n.id);
+      } catch (e) { if (!quiet) throw e; break; }
+      L.checked = [...checked]; L.done = true; store.set("anki-links", L, true);
+    }
+    L.checked = [...checked]; L.done = true; store.set("anki-links", L, true);
+    anki.mapped = Object.keys(anki.map).length;
+    if (settings().ankiMode) await anki.pull().catch(() => {});
+    return linked;
+  };
   function ankiPanel() {
     const box = el("div", "anki"); box.append(el("b", null, T.ankiTitle));
     if (!anki.desktop?.childProcess) {
@@ -311,6 +392,19 @@
     const sync = el("button", "btn small", T.ankiSync); sync.onclick = async () => { sync.disabled = true; await anki.flush(); await anki.call("sync").catch(() => {}); if (settings().ankiMode) await anki.pull().catch(() => {}); sync.disabled = false; render(); LVP.updateDue(); };
     const push = el("button", "btn small", T.ankiPush); push.onclick = async () => { push.disabled = true; const n = await anki.push().catch(() => 0); anki.status = `${T.ankiOn} · ${n} ${T.ankiPushed}`; render(); };
     r.append(sync, push); box.append(r);
+    if (LVP.sample()) {
+      const n = Object.keys(links().notes).length;
+      const lk = el("button", "btn small", n ? `${T.linkAgain} (${n} ${T.linked})` : T.link);
+      lk.onclick = async () => {
+        lk.disabled = true;
+        try {
+          const got = await anki.link((i, total) => { lk.textContent = `${T.linking} ${i}/${total}`; });
+          anki.status = `${T.ankiOn} · ${got} ${T.linkedNew}`;
+        } catch (e) { anki.status = LVP.errText(e); }
+        render(); LVP.updateDue();
+      };
+      box.append(lk, el("span", "hint", T.linkHint));
+    }
     return box;
   }
 
@@ -329,14 +423,16 @@
     if (repaired) store.set("srs", srs(), true);
     if (F && !fsrs) fsrs = F.fsrs(F.generatorParameters({ request_retention: 0.9, enable_fuzz: true }));
     LVP.updateDue();
-    if (fromAccount || anki.desktop !== null) return;
+    if (fromAccount) { if (anki.desktop?.childProcess && !anki.ok && settings().ankiWanted) anki.connect(); LVP.updateDue(); return; }
+    if (anki.desktop !== null) return;
     anki.desktop = (await LVP.use("desktop")) || false;
     if (anki.desktop?.childProcess) {
       const st = await anki.desktop.permissions?.state?.("full-access").catch(() => null);
-      if (st === "granted") anki.connect();
+      // connected once: reconnect on every load (the app may ask for the permission again after an update)
+      if (st === "granted" || settings().ankiWanted) anki.connect();
       const n = LVP.review.dueCount();
       const nst = await anki.desktop.permissions?.state?.("notifications").catch(() => null);
-      if (n && nst === "granted") anki.desktop.notification.show({ body: `${c.title}: ${n} ${T.notify}` }).catch(() => {});
+      if (n && nst === "granted") anki.desktop.notification?.show?.({ body: `${c.title}: ${n} ${T.notify}` }).catch(() => {});
     }
   });
   LVP.hooks.tick.push(() => { /* cheap: unlocking happens via progress; refresh the pill now and then */ });

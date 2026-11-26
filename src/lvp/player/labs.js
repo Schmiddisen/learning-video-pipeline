@@ -208,7 +208,7 @@
     if (!state) LVP.store.set(st._key, st);
     const lab = st.lab;
     const t = el("h2", "h", lab.title || ""); box.append(t);
-    box.append(el("span", "hint", `${lab.type === "steps" ? T.stepsType : (T.lang[lab.lang] || lab.lang)}${lab.authored ? " · " + T.authored : ""}${st.passed ? " · ✓ " + T.done : ""}`));
+    box.append(el("span", "hint", `${lab.type === "steps" ? T.stepsType : (T.lang[lab.lang] || lab.lang)}${lab.authored ? " · " + T.authored : ""}${st.passed ? " · " + T.done : ""}`));
     const goal = el("div", "lab-goal"); LVP.renderRich(goal, lab.goal || ""); box.append(goal);
     if (lab.type === "steps") {
       renderSteps(box, st);
