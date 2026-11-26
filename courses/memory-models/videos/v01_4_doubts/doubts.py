@@ -197,6 +197,12 @@ class S1Window(Lesson):
             hold="insight",
         ):
             self.at("x", FadeIn(blind), events.animate.set_color(MUTED))
+        with self.voiceover(
+            "Fail three cards from the same deck this morning, and Instant lowers its guess "
+            "for this one; the date was fixed last week.",
+            hold="reveal",
+        ):
+            self.play(events[0].animate.set_color(NEGATIVE), run_time=0.5)
 
         self.clear_stage()
         src = label(
@@ -246,6 +252,12 @@ class S1Window(Lesson):
             hold="step",
         ):
             self.at("c", GrowFromEdge(frozen[1], LEFT), FadeIn(frozen[0], frozen[2]))
+        with self.voiceover(
+            "If the gain came from updating more often, freezing would keep it; "
+            "if it came from the window, freezing would erase it.",
+            hold="question",
+        ):
+            pass
         with self.voiceover(
             'The gain <bookmark mark="z"/>shrinks to about zero point four percent, '
             "and the confidence interval includes zero.",
@@ -329,6 +341,12 @@ class S2Fairness(Lesson):
             hold="step",
         ):
             pass
+        with self.voiceover(
+            "FSRS gets to learn your habits before its test; "
+            "RWKV meets a stranger, but it has already studied five thousand of them.",
+            hold="reveal",
+        ):
+            self.play(n_tr.animate.scale(1.1), run_time=0.4)
 
         self.clear_stage()
         inputs = VGroup(
@@ -342,6 +360,12 @@ class S2Fairness(Lesson):
             hold="step",
         ):
             self.at("x", FadeIn(extra), FadeIn(inputs, lag_ratio=0.2))
+        with self.voiceover(
+            "More data isn't cheating, but it means the table compares models plus data, "
+            "not models alone.",
+            hold="reveal",
+        ):
+            self.play(inputs.animate.set_color(ACCENT), run_time=0.5)
         row = (
             VGroup(
                 Card(label("card 4711", size=26), color=FG, pad=0.18),
@@ -392,6 +416,12 @@ class S2Fairness(Lesson):
             )
             status.next_to(VGroup(row, miss, arrow, means, leak), RIGHT, buff=0.6)
             self.at("q", FadeIn(status, shift=LEFT * 0.1))
+        with self.voiceover(
+            "And how much such a leak would move the score has not been measured, "
+            "as far as we know.",
+            hold="step",
+        ):
+            self.play(status[1][1].animate.scale(1.3), run_time=0.5)
 
         self.clear_stage()
         steel = label("The strongest case for RWKV", size=32, weight="BOLD").to_edge(UP, buff=1.0)
@@ -486,17 +516,32 @@ class S3IntoAnki(Lesson):
             hold="step",
         ):
             self.at("f", FadeIn(inst[1]))
+        with self.voiceover(
+            "So with Instant, the order on your desktop and the dates on your phone "
+            "come from two different models.",
+            hold="reveal",
+        ):
+            self.play(inst.animate.scale(1.05), run_time=0.4)
+            self.play(inst.animate.scale(1 / 1.05), run_time=0.4)
+        spacing = label("same card again: after 5 other answers and 30 s", size=22, color=MUTED)
+        spacing.next_to(inst, DOWN, buff=0.3).align_to(cal, LEFT)
+        with self.voiceover(
+            "Within a day it can show a card again, by default "
+            '<bookmark mark="g"/>after five other answers and thirty seconds.',
+            hold="step",
+        ):
+            self.at("g", FadeIn(spacing))
         phone = VGroup(label("phone", size=26, color=PRIMARY), label("→ FSRS-6", size=26)).arrange(
             RIGHT, buff=0.25
         )
-        phone.next_to(inst, DOWN, buff=0.5).align_to(cal, LEFT)
+        phone.next_to(spacing, DOWN, buff=0.45).align_to(cal, LEFT)
         with self.voiceover(
             '<bookmark mark="p"/>On a phone, the fork falls back to FSRS-6 for the next intervals.',
             hold="step",
         ):
             self.at("p", FadeIn(phone))
         replay = label("fixed weights · history replayed into the state", size=22, color=MUTED)
-        replay.next_to(phone, DOWN, buff=0.5).align_to(cal, LEFT)
+        replay.next_to(phone, DOWN, buff=0.4).align_to(cal, LEFT)
         with self.voiceover(
             'The weights never change: <bookmark mark="w"/>loading your collection replays '
             "your history into the state, as in Video 1.3.",
@@ -650,6 +695,13 @@ class S4Convince(Lesson):
             self.at("r", FadeIn(dash[0]))
             self.at("n", FadeIn(dash[1]))
             self.at("t", FadeIn(dash[2]))
+        with self.voiceover(
+            "If true retention sits well above your desired retention, "
+            "the scheduler is over-cautious and costs you time; "
+            "below it, you forget more than you asked for.",
+            hold="reveal",
+        ):
+            self.play(dash[0].animate.scale(1.08), run_time=0.5)
         path = label("study player: Review → settings → RWKV mode", size=26, color=ACCENT)
         path.move_to(UP * 0.1)
         with self.voiceover(
@@ -682,6 +734,12 @@ class S4Convince(Lesson):
             hold="reveal",
         ):
             self.at("f", FadeIn(fair))
+        with self.voiceover(
+            "And skip the first week after a switch: "
+            "the old due dates are still working their way through.",
+            hold="step",
+        ):
+            self.play(cols[2].animate.scale(1.08), run_time=0.5)
         self.checkpoint(
             "Your preset uses RWKV-Instant, and you review\n"
             "on your phone during a train ride.\nWhat decides which cards are due there?",

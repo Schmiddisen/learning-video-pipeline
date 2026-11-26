@@ -867,7 +867,7 @@ class S5Outro(LessonScene):
         self.clear_stage()
         self.recall(
             [
-                "A new user installs RWKV tomorrow. Does the model\ntrain on their reviews first? What happens instead?",
+                "Which can move RWKV's prediction for card A but not FSRS's:\na lapse on A, a slow answer on A's sibling, a busy day?",
                 "You want a channel to still feel last month's reviews.\nShould its decay factor be near 0 or near 1?",
                 "Anki needs a due date for a card. Which RWKV variant\ncan give one, and what does it read it from?",
             ]

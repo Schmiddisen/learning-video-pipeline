@@ -70,4 +70,5 @@ seems, and what it takes to put it in Anki.
 
 ## Additions (not in sources)
 - Weather-forecast analogy for calibration; coin-flip baseline intuition for log loss
-  (ln 2 ≈ 0.693; AVG's 0.39 corresponds to always predicting the global mean ≈ 0.89).
+  (ln 2 ≈ 0.693). AVG = always predict the average; its 0.3945 averages over users with
+  different recall rates, so it can't be reduced to one global mean (corrected after review).
