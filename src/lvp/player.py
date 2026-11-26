@@ -200,6 +200,20 @@ def export_video(scene: Path, quality: str | None, max_mb: float) -> dict | None
                 quizzes.append(q | {"section": name})
         if not quizzes:  # older build: estimate from the scene file
             quizzes = [q | {"section": name} for q in _estimated_quizzes(scene, name, t0, end)]
+            # questions a scene draws itself (not via the helpers) still appear in the plan's
+            # on-screen text: take the moment each question's text first shows up
+            screens = [(e["t"], " ".join(e["screen"])) for e in entries if "screen" in e]
+            for q in quizzes:
+                want = " ".join(q["q"].split())
+                hit = next((ts for ts, text in screens if want and want in text), None)
+                if hit is not None:
+                    q["t"] = round(t0 + hit, 2)
+                    q.pop("estimated", None)
+                    if q.get("a"):
+                        a = " ".join(q["a"].split())
+                        shown = next((ts for ts, text in screens if ts > hit and a in text), None)
+                        if shown is not None:
+                            q["answer_t"] = round(t0 + shown, 2)
         info["quizzes"] += quizzes
         t0 += end
     info["duration"] = round(_probe(video), 2)
