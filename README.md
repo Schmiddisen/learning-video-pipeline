@@ -46,6 +46,7 @@ asks a few questions about you (goal, what you already know, depth, language, bu
 | `/lvp:ingest` · `/lvp:curriculum` · `/lvp:script` · `/lvp:review` · `/lvp:produce` · `/lvp:companion` | the individual steps |
 | `/lvp:feedback 2.2 at 9:15 refers to the slide` | finds the exact line, fixes it (and its siblings across the course), re-records only what changed, re-verifies |
 | `/lvp:player` | publishes the course as a study player: the video's questions graded by Claude, circle anything on the picture and ask about that moment, explain-back, flashcards (FSRS, synced with Anki) that unlock as you watch, hands-on labs, exam practice |
+| `/lvp:lab` | designs verified hands-on labs for any subject: code to build or break the idea, or worked problems step by step – shown in the player's Lab tab |
 | `/lvp:coach` | reads how you are actually doing in the player and adapts: targeted cards and labs, fixes to confusing videos, a note with focus moments in your Today panel |
 | `uv run lvp` | render menu for your final videos (4K/1080p/480p, one, a range or all) – uses recorded narration only, never pays |
 

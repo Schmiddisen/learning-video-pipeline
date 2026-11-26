@@ -50,3 +50,42 @@ labs:
 
       sp, ap = simulate(100_000, 0.001, 0.99)
       print(f"{sp} of {ap} positives are sick: {sp / max(ap, 1):.1%}")
+
+  - video: v1.2
+    title: Two positive tests, step by step
+    goal: |
+      Work through Bayes in odds form for a disease that affects 1 in 1000 people and a test
+      that is positive for 99 % of the sick and 1 % of the healthy. The first step is done.
+    steps:
+      - prompt: "Odds of being sick before any test (sick : healthy, as one number)?"
+        kind: number
+        answer: "0.001001"
+        calc: "1 / 999"
+        tol: 0.01
+        example: true
+        explain: "1 sick for every 999 healthy: 1 : 999 ≈ 0.001."
+      - prompt: "Likelihood ratio of a positive result?"
+        kind: number
+        answer: "99"
+        calc: "0.99 / 0.01"
+        tol: 0.01
+        hint: "How many times more likely is a positive if you are sick than if you are healthy?"
+        explain: "99 % / 1 % = 99."
+      - prompt: "Odds after one positive (as one number)?"
+        kind: number
+        answer: "0.0991"
+        calc: "(1 / 999) * 99"
+        tol: 0.01
+        hint: "Multiply the odds before by the likelihood ratio."
+        explain: "99 : 999 ≈ 1 : 10."
+      - prompt: "Probability of being sick after two independent positives, in percent?"
+        kind: number
+        answer: "90.75"
+        calc: "100 * (99 * 99) / (99 * 99 + 999)"
+        tol: 0.01
+        hint: "Odds after two positives are 9801 : 999. Probability = odds / (1 + odds)."
+        explain: "9801 / (9801 + 999) ≈ 90.7 %."
+      - prompt: "In one sentence: why did the second test change the result so much more than the first?"
+        kind: text
+        answer: "It started from much higher odds (about 1 : 10 instead of 1 : 999), and the same factor 99 multiplies them."
+        hint: "Same test, different starting point."

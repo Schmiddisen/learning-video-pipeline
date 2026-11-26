@@ -30,7 +30,7 @@ Group the evidence by concept, not by item: a concept is weak when several signa
 
 ## 3. Act
 - Learner gaps: new cards in `cards/*.yaml` (why/what-if, linked by `tags: [vX.Y]`),
-  a lab in `labs/*.yaml` for the concept (format below), and the moments to rewatch.
+  a lab for the concept (`lab` skill), and the moments to rewatch.
 - Material problems: fix the scene file with the `feedback` skill (locate → fix → re-record
   only what changed → verify).
 - Rebuild what changed (`lvp-anki`, `lvp-player --only-data`) and republish the player to
@@ -40,21 +40,6 @@ Group the evidence by concept, not by item: a concept is weak when several signa
   (pass `if_version` when the doc exists). It shows at the top of the player's Today panel.
 - Tell the user the same in a few lines.
 
-## Authored lab format (`labs/NN_part.yaml`)
-```yaml
-labs:
-  - video: v2.2              # or a video id; optional `section: S3Name`
-    title: Break a reused key
-    lang: python             # python (Pyodide, standard library) or javascript
-    goal: Two messages were encrypted with the same keystream. Recover both.
-    starter: |
-      def xor(a, b): ...
-      # TODO
-    check: |
-      assert recover(c1, c2, "the ") .startswith("attack"), "the first word should appear"
-      print("ALL CHECKS PASSED")
-    hints: ["direction", "method", "nearly the code"]
-    solution: |
-      ...
-```
-The `check` runs after the learner's code and must end by printing `ALL CHECKS PASSED`.
+## Labs
+For a weak concept that answers alone don't fix, add a lab with the `lab` skill (it picks
+code or step-by-step, writes `labs/*.yaml` and verifies it).

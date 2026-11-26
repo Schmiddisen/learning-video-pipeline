@@ -14,7 +14,8 @@
       helpPrompt: "I'm stuck on this lab. Look at my code and the last output; give me the smallest nudge that gets me unstuck – no full solution.",
       solConfirm: "Show the solution? Try a hint first – struggling a bit is where the learning happens.", yes: "Show it", no: "Not yet",
       part: "Part", done: "done", authored: "from the course", lang: { python: "Python", javascript: "JavaScript" },
-      noClaude: "Labs are designed by Claude – open the player on claude.ai or in the Claude app."
+      noClaude: "Labs are designed by Claude – open the player on claude.ai or in the Claude app.",
+      step: "Step", example: "worked example", opening: "Opening", stepsType: "Worked problem", notYet: "Not yet.", showStep: "Show this step"
     },
     de: {
       intro: "Übe die Idee des Abschnitts, den du gerade siehst, mit einer kleinen praktischen Aufgabe. Claude entwirft sie für diesen Abschnitt; die Prüfungen laufen direkt hier.",
@@ -25,7 +26,8 @@
       helpPrompt: "Ich komme bei diesem Labor nicht weiter. Sieh dir meinen Code und die letzte Ausgabe an; gib mir den kleinsten Schubs, der mich weiterbringt – keine komplette Lösung.",
       solConfirm: "Lösung zeigen? Probier erst einen Hinweis – ein bisschen Ringen ist der Teil, bei dem man lernt.", yes: "Zeigen", no: "Noch nicht",
       part: "Abschnitt", done: "geschafft", authored: "aus dem Kurs", lang: { python: "Python", javascript: "JavaScript" },
-      noClaude: "Labore entwirft Claude – öffne den Player auf claude.ai oder in der Claude-App."
+      noClaude: "Labore entwirft Claude – öffne den Player auf claude.ai oder in der Claude-App.",
+      step: "Schritt", example: "Beispiel", opening: "Einstieg", stepsType: "Aufgabe in Schritten", notYet: "Noch nicht.", showStep: "Schritt zeigen"
     }
   };
   let T = S.en, course = null, worker = null, seq = 0;
@@ -59,25 +61,128 @@
       course.learner ? "About the learner:\n" + course.learner.slice(0, 800) : "",
       avoid ? "Do something different from this earlier lab: " + avoid : "",
       "",
-      "Rules:",
-      "- The learner writes a little code that makes the idea tangible: implement the mechanism in miniature, break it, measure it, or simulate it. 10–30 minutes of work.",
+      "First decide which skill this part should train, then pick the lab type that trains it:",
+      '- "code": the learner builds, breaks, measures or simulates the mechanism in a little code (best when the idea is a procedure, an algorithm, an attack, a simulation, or the learner programs).',
+      '- "steps": a worked problem solved step by step – computations, derivations, applying a rule to a case, reading a result (best for formulas, quantities, proofs and judgement; no programming needed).',
+      "10–30 minutes of work. Everything learner-facing in the language of the narration.",
+      "",
+      'For "code":',
       course.python === false
-        ? "- Language: javascript (plain functions, console.log; no DOM, no network)."
-        : "- Language: python (preferred; standard library only – no numpy, no network, no files, no input()) or javascript (plain functions, console.log; no DOM, no network).",
-      "- starter: runnable code with clear TODOs, all helpers they shouldn't have to write, small and readable.",
-      "- check: code appended after the learner's code that tests it with assert statements (python) or assert(cond, message) calls (javascript; assert is provided). Every failing check prints a helpful message that says what is wrong, not the answer. The last line prints exactly ALL CHECKS PASSED.",
-      "- hints: 3 graded hints – 1. direction, 2. method, 3. nearly the code.",
-      "- solution: a complete starter with the TODOs filled in that passes the checks.",
-      "- Everything learner-facing in the language of the narration.",
-      'Reply with only JSON: {"title": "...", "goal": "what to do and why it matters, 2-4 sentences", "lang": "python" | "javascript", "starter": "...", "check": "...", "hints": ["...", "...", "..."], "solution": "..."}',
+        ? "- lang: javascript (plain functions, console.log; no DOM, no network)."
+        : "- lang: python (preferred; standard library only – no numpy, no network, no files, no input()) or javascript (plain functions, console.log; no DOM, no network).",
+      "- starter: runnable code with clear TODOs and all helpers they shouldn't have to write, small and readable.",
+      "- check: code appended after the learner's code that tests it with assert statements (python) or assert(cond, message) calls (javascript; assert is provided). Every failing check says what is wrong, not the answer. The last line prints exactly ALL CHECKS PASSED.",
+      "- hints: 3 graded hints – 1. direction, 2. method, 3. nearly the code. solution: the starter completed so that it passes the checks.",
+      "",
+      'For "steps": 3–6 steps that build on each other; the first may be fully worked (example: true) so the learner sees the method, later ones fade to the learner.',
+      '- each step: {"prompt": "...", "kind": "number" | "text", "answer": the correct answer, "calc": for numbers a Python expression that computes it (e.g. "99 / (99 + 999)"), "tol": relative tolerance for numbers (e.g. 0.02), "hint": "...", "explain": "why, 1-2 sentences", "example": true|false}',
+      "- numbers: ask for one value with its unit or format stated (e.g. 'as a percentage, one decimal'); text: a short answer Claude will judge.",
+      "",
+      'Reply with only JSON. Code: {"type": "code", "title": "...", "goal": "what to do and why it matters, 2-4 sentences", "lang": "python" | "javascript", "starter": "...", "check": "...", "hints": ["...", "...", "..."], "solution": "..."}',
+      'Steps: {"type": "steps", "title": "...", "goal": "...", "steps": [ ... ]}',
     ].filter(Boolean).join("\n");
-    const lab = await sample.json(prompt, { cache: false });
-    if (!lab || !lab.starter || !lab.check) throw { code: "invalid_json" };
+    let lab = await sample.json(prompt, { cache: false });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const problem = await verify(lab);
+      if (!problem) { lab.verified = true; return lab; }
+      if (attempt === 1) break;
+      // one repair round: show Claude exactly what failed
+      lab = await sample.json(prompt + "\n\nYour previous lab failed verification:\n" + problem + "\nPrevious lab:\n" + JSON.stringify(lab).slice(0, 12000) + "\nReturn the corrected lab, same JSON format.", { cache: false });
+    }
+    throw { code: "invalid_json" };
+  }
+  LVP.designLab = design;
+
+  // Returns null when the lab is sound, else a description of what failed.
+  async function verify(lab) {
+    if (!lab || typeof lab !== "object") return "not a JSON object";
+    if (lab.type === "steps") {
+      if (!Array.isArray(lab.steps) || !lab.steps.length) return "no steps";
+      for (const [i, st] of lab.steps.entries()) {
+        if (!st.prompt) return `step ${i + 1} has no prompt`;
+        if (st.kind === "number") {
+          const want = toNumber(st.answer);
+          if (want == null) return `step ${i + 1}: answer is not a number`;
+          if (st.calc && course.python !== false) {
+            const r = await exec("python", `print(repr(float(${st.calc})))`, 30000);
+            const got = r.ok ? Number(r.out.trim()) : NaN;
+            if (!Number.isFinite(got)) return `step ${i + 1}: calc "${st.calc}" does not evaluate: ${r.out.slice(0, 200)}`;
+            if (!close(got, want, Math.max(Number(st.tol) || 0.01, 0.005))) return `step ${i + 1}: answer ${st.answer} but calc gives ${got}`;
+          }
+        }
+      }
+      return null;
+    }
+    lab.type = "code";
+    if (!lab.starter || !lab.check || !lab.solution) return "starter, check and solution are required";
     lab.lang = lab.lang === "javascript" ? "javascript" : "python";
-    // a lab whose own solution fails its checks is not handed to the learner
-    const verify = await exec(lab.lang, lab.solution + "\n\n" + lab.check, 30000);
-    lab.verified = verify.ok && /ALL CHECKS PASSED/.test(verify.out);
-    return lab;
+    const r = await exec(lab.lang, lab.solution + "\n\n" + lab.check, 30000);
+    if (!(r.ok && /ALL CHECKS PASSED/.test(r.out))) return "the solution does not pass the checks. Output:\n" + String(r.out).slice(-1500);
+    const s = await exec(lab.lang, lab.starter + "\n\n" + lab.check, 30000);
+    if (s.ok && /ALL CHECKS PASSED/.test(s.out)) return "the unfinished starter already passes the checks – the checks test nothing";
+    return null;
+  }
+  LVP.verifyLab = verify;
+
+  // "9,1 %", "1/11", "0.0909", "≈ 91%" → number (percent stays as written: 9.1)
+  function toNumber(v) {
+    if (typeof v === "number") return v;
+    let s = String(v ?? "").replace(/[≈~\s]/g, "").replace(/%$/, "").replace(/(\d),(\d)/g, "$1.$2");
+    const f = /^(-?[\d.]+)\/(-?[\d.]+)$/.exec(s);
+    if (f) return Number(f[1]) / Number(f[2]);
+    s = s.replace(/[^\d.eE+-]/g, "");
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : null;
+  }
+  const close = (a, b, tol) => Math.abs(a - b) <= Math.max(Math.abs(b) * tol, 1e-9);
+
+  function renderSteps(box, st) {
+    const lab = st.lab; st.steps ||= {};
+    lab.steps.forEach((step, i) => {
+      const done = st.steps[i]?.ok || step.example;
+      const prevDone = i === 0 || lab.steps.slice(0, i).every((x, k) => x.example || st.steps[k]?.ok || st.steps[k]?.shown);
+      if (!prevDone) return;   // steps unlock one after another
+      const v = el("div", "verdict " + (done ? "right" : ""));
+      v.append(el("b", null, `${T.step} ${i + 1}${step.example ? " · " + T.example : ""}`));
+      const pr = el("div"); LVP.renderRich(pr, step.prompt); v.append(pr);
+      if (step.example || st.steps[i]?.ok || st.steps[i]?.shown) {
+        v.append(el("div", "mine", "→ " + String(step.answer)));
+        if (step.explain) { const e = el("div"); LVP.renderRich(e, step.explain); v.append(e); }
+        box.append(v); return;
+      }
+      const inp = el("input", "field"); inp.style.minHeight = "0"; inp.id = `step-${i}`; inp.value = st.steps[i]?.text || "";
+      const fb = el("div", "hint");
+      const check = el("button", "btn small primary", T.check);
+      check.onclick = async () => {
+        const rec = (st.steps[i] ||= { tries: 0 }); rec.text = inp.value.trim(); rec.tries++;
+        let ok = false;
+        if (step.kind === "number") {
+          const got = toNumber(rec.text), want = toNumber(step.answer);
+          ok = got != null && want != null && (close(got, want, Number(step.tol) || 0.02) || close(got * 100, want, Number(step.tol) || 0.02) || close(got, want * 100, Number(step.tol) || 0.02));
+          fb.textContent = ok ? T.passed : (rec.tries >= 2 && step.hint ? `${T.notYet} ${T.hint}: ${step.hint}` : T.notYet);
+        } else if (LVP.sample()) {
+          check.disabled = true; fb.textContent = LVP.L.grading;
+          try {
+            const r = await LVP.sample().json([
+              "Judge a learner's short answer to one step of a worked problem. Accept answers that are right in substance.",
+              `Step: ${step.prompt}`, `Correct answer: ${step.answer}`, `Learner: ${rec.text}`,
+              'Reply with only JSON in the language of the step: {"ok": true|false, "feedback": "one sentence"}',
+            ].join("\n"), { modelTier: "quick", cache: false });
+            ok = !!r.ok; fb.textContent = String(r.feedback || "");
+          } catch (e) { fb.textContent = LVP.errText(e); }
+          check.disabled = false;
+        }
+        rec.ok = ok;
+        if (ok && lab.steps.every((x, k) => x.example || st.steps[k]?.ok || st.steps[k]?.shown) && !st.passed) { st.passed = true; st.passedAt = Date.now(); }
+        LVP.store.set(st._key, st);
+        if (ok) render();
+      };
+      const show = el("button", "btn small", T.showStep);
+      show.onclick = () => { (st.steps[i] ||= { tries: 0 }).shown = true; LVP.store.set(st._key, st); render(); };
+      inp.addEventListener("keydown", (e) => { if (e.key === "Enter") check.click(); });
+      const row = el("div", "row"); row.append(check); if ((st.steps[i]?.tries || 0) >= 2) row.append(show);
+      v.append(inp, row, fb); box.append(v);
+    });
   }
 
   function render() {
@@ -97,12 +202,17 @@
       const b = el("button", "btn primary", T.make); b.onclick = () => create(cur, sec, null, b); box.append(b);
       return;
     }
-    const st = state || { _key: key(cur.id, sec.name), lab: { ...authored, authored: true }, code: authored.starter, hints: 0, checks: 0 };
+    const st = state || { _key: key(cur.id, sec.name), lab: { type: authored.steps ? "steps" : "code", ...authored, authored: true }, code: authored.starter, hints: 0, checks: 0 };
     if (!state) LVP.store.set(st._key, st);
     const lab = st.lab;
     const t = el("h2", "h", lab.title || ""); box.append(t);
-    box.append(el("span", "hint", `${T.lang[lab.lang] || lab.lang}${lab.authored ? " · " + T.authored : ""}${st.passed ? " · ✓ " + T.done : ""}`));
+    box.append(el("span", "hint", `${lab.type === "steps" ? T.stepsType : (T.lang[lab.lang] || lab.lang)}${lab.authored ? " · " + T.authored : ""}${st.passed ? " · ✓ " + T.done : ""}`));
     const goal = el("div", "lab-goal"); LVP.renderRich(goal, lab.goal || ""); box.append(goal);
+    if (lab.type === "steps") {
+      renderSteps(box, st);
+      if (LVP.sample()) { const again = el("button", "btn small", T.another); again.onclick = () => create(cur, sec, lab.title, again); box.append(rowOf(again)); }
+      return;
+    }
     const code = el("textarea", "code"); code.value = st.code ?? lab.starter; code.spellcheck = false; code.id = "lab-code";
     code.addEventListener("keydown", (e) => {
       if (e.key === "Tab") { e.preventDefault(); const s = code.selectionStart; code.setRangeText("    ", s, code.selectionEnd, "end"); }
@@ -146,7 +256,7 @@
   function labSection(cur) {
     const t = LVP.video.currentTime, s = LVP.sectionAt(t);
     const ch = cur.chapters.filter((c) => c.t >= s.t - 0.1 && c.t < s.end)[0];
-    return { name: s.name, t: s.t, end: s.end, title: ch?.title || s.name };
+    return { name: s.name, t: s.t, end: s.end, title: ch?.title || (/^S0/.test(s.name) ? T.opening : s.name.replace(/^S\d+/, "")) };
   }
   async function create(cur, sec, avoid, b) {
     b.disabled = true; b.textContent = T.making;
