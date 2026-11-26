@@ -1,0 +1,128 @@
+deck: "Memory Models::01 RWKV and the science of scheduling"
+cards:
+  - id: mm-scheduler-two-parts
+    tags: [v1.1, scheduling]
+    front: Every modern scheduler is two parts. Which?
+    back: A predictor of retrievability (chance you'd recall the card now) and a rule that turns it into a due date (review when it falls to your desired retention).
+  - id: mm-stability-def
+    tags: [v1.1, fsrs]
+    front: In FSRS, what does "stability 10 days" mean exactly?
+    back: Recall probability falls to 90 % after 10 days without review.
+  - id: mm-dr-tradeoff
+    tags: [v1.1, desired-retention]
+    front: Why does raising desired retention from 0.90 to 0.95 cost far more than 5 % extra work?
+    back: You review where the curve is still high and flat, so intervals shrink sharply (for S = 10 days, from 10 to about 4.6 days) – roughly twice as many reviews.
+  - id: mm-dynamic-dr
+    tags: [v1.1, v1.4, desired-retention]
+    front: What does "dynamic desired retention" change – the memory model or the scheduling rule?
+    back: Only the rule – each card (e.g. by word frequency) gets its own target; the predicted curve stays the same, and RWKV is not retrained.
+  - id: mm-fsrs-blind
+    tags: [v1.1, fsrs]
+    front: What information about your studying does FSRS never see?
+    back: Anything outside the card's own review history – siblings, decks, how many reviews you did today, answer times, time of day.
+  - id: mm-fsrs-per-user
+    tags: [v1.1, fsrs]
+    front: FSRS-6 has 21 parameters. Whose data are they fit to?
+    back: Your own review history – the optimizer fits a personal set per user (or preset).
+  - id: mm-logloss-cost
+    tags: [v1.2, metrics]
+    front: Log loss of predicting 90 % for a card you then forget, vs one you recall?
+    back: "−ln(0.1) ≈ 2.30 vs −ln(0.9) ≈ 0.105 – a confident miss costs about 22 times as much."
+  - id: mm-coinflip-ll
+    tags: [v1.2, metrics]
+    cloze: "Always predicting 50 % gives a log loss of {{c1::ln 2 ≈ 0.693}} whatever happens."
+  - id: mm-calibration
+    tags: [v1.2, metrics]
+    front: What does it mean that a memory model is well calibrated?
+    back: Of all reviews it gives 80 %, about 80 % are actually recalled – stated probabilities match observed frequencies.
+  - id: mm-rmse-exploit
+    tags: [v1.2, metrics]
+    front: How can a predictor get the best RMSE(bins) in the benchmark and still be useless?
+    back: It matches every bin's average but says 0 % or 100 % per review – bins look perfect, individual predictions are wildly wrong (log loss 4.6).
+  - id: mm-auc
+    tags: [v1.2, metrics]
+    front: What does AUC measure, and why does "always predict the average" score 0.5?
+    back: How well predictions rank recalled reviews above forgotten ones; a constant can't rank anything, so it is at chance.
+  - id: mm-calib-vs-auc
+    tags: [v1.2, metrics]
+    front: Which benchmark metrics measure calibration and which discrimination?
+    back: Log loss and RMSE(bins) – calibration (log loss also rewards sharpness); AUC – discrimination (ranking).
+  - id: mm-time-split
+    tags: [v1.2, benchmark]
+    front: Why does the benchmark train FSRS on your older reviews and test on newer ones, not a random split?
+    back: That is how a scheduler is used – it must predict the future from the past; a random split would let it peek at later reviews.
+  - id: mm-leaderboard
+    tags: [v1.2, benchmark]
+    front: "Log loss on the 10k-collection benchmark (no same-day reviews): FSRS-7, RWKV-Curve, RWKV-Instant?"
+    back: About 0.340, 0.319 and 0.277 (lower is better; always-the-average scores 0.395).
+  - id: mm-recurrence
+    tags: [v1.3, rwkv]
+    front: Why can a recurrent model replay 100,000 reviews cheaply when attention can't?
+    back: It carries a fixed-size state and updates it once per review – constant memory and work per step, instead of looking back at the whole growing history.
+  - id: mm-wkv
+    tags: [v1.3, rwkv]
+    cloze: "RWKV's running memory per channel: num ← {{c1::e^(−w)·num + e^(k)·v}}, den ← {{c2::e^(−w)·den + e^(k)}}, output = num/den"
+  - id: mm-decay-channels
+    tags: [v1.3, rwkv]
+    front: In RWKV, what is a channel with a large decay w good for, and one with a small w?
+    back: Large w forgets fast – tracks the last few reviews (today's form); small w keeps long-term averages (months of history).
+  - id: mm-rwkv-parallel
+    tags: [v1.3, rwkv]
+    front: What does RWKV keep from transformers and what from RNNs?
+    back: Training in parallel over the whole sequence (like a transformer); running step by step with a constant-size state (like an RNN).
+  - id: mm-rwkv-inputs
+    tags: [v1.3, rwkv]
+    front: Name four inputs the benchmark's RWKV sees that FSRS doesn't.
+    back: Other cards' reviews in the same collection, sibling cards, deck/preset hierarchy, reviews and new cards done today, answer duration, day/month/year.
+  - id: mm-shared-model
+    tags: [v1.3, rwkv]
+    front: RWKV isn't trained on your reviews. How does it adapt to you then?
+    back: One shared model (trained across thousands of users) replays your history into its state; you change the state, never the weights.
+  - id: mm-rwkv-size
+    tags: [v1.3, rwkv]
+    front: Parameter counts – benchmark RWKV vs FSRS-7?
+    back: About 2.76 million vs 34.
+  - id: mm-curve-vs-instant
+    tags: [v1.3, rwkv]
+    front: RWKV-Curve vs RWKV-Instant – which can set a due date by itself, and why?
+    back: Curve – it predicts recall as a function of elapsed time, so you can solve for the day it hits desired retention. Instant only answers "recall if reviewed right now".
+  - id: mm-instant-odd
+    tags: [v1.3, rwkv]
+    front: Name an odd behaviour RWKV-Instant can show that a forgetting curve can't.
+    back: Predicted recall that rises with time, or never reaching 100 % – it has no built-in decay shape.
+  - id: mm-instant-advantage
+    tags: [v1.4, caveats]
+    front: Why does RWKV-Instant score so much better than any model that must set a due date?
+    back: It predicts at review time, after seeing everything since the card's last review (today's other results, siblings, your form). A scheduler setting a due date can't know that yet.
+  - id: mm-fsrs7-instant
+    tags: [v1.4, caveats]
+    front: What did letting FSRS-7 update its parameters right up to review time show (fork FAQ, 300 users)?
+    back: Log loss dropped about 7 % (0.352 → 0.327); freezing them after the previous review gave almost nothing – the gain is late information, not a better curve.
+  - id: mm-split-fairness
+    tags: [v1.4, caveats]
+    front: How is RWKV's benchmark split different from FSRS's?
+    back: RWKV is trained on 5,000 users and tested on the other 5,000; FSRS is fit per user on older reviews and tested on newer ones.
+  - id: mm-deleted-leak
+    tags: [v1.4, caveats]
+    front: How can deleted cards leak the future into a memory model's training data?
+    back: Deleted cards lack card/note/deck rows; if inputs are marked "missing", the model learns that "missing" means "will be abandoned" – a hint from the future. The fork's models zero those inputs.
+  - id: mm-instant-fallback
+    tags: [v1.4, anki]
+    front: In the experimental FSRS-7/RWKV Anki fork, how does RWKV-Instant get due dates for sync and phones?
+    back: A fallback calculator (FSRS or RWKV-Curve) writes the stored due dates; Instant itself only orders cards by current predicted recall.
+  - id: mm-mobile-fallback
+    tags: [v1.4, anki]
+    front: You review on your phone with the fork's RWKV scheduler set on desktop. What schedules the next interval?
+    back: The phone's own FSRS-6 – mobile clients can't run RWKV.
+  - id: mm-live-session
+    tags: [v1.4, anki]
+    front: What does RWKV4Anki's Live Session do differently from a normal due queue?
+    back: It refreshes predictions between reviews and picks cards whose current predicted recall is below desired retention.
+  - id: mm-ll-not-workload
+    tags: [v1.4, caveats]
+    front: Why doesn't a better log loss guarantee fewer reviews?
+    back: Log loss rewards accurate predictions; workload depends on what the scheduler does with them (intervals, ordering, targets). The fork's FAQ promises no fewer reviews than FSRS.
+  - id: mm-what-to-measure
+    tags: [v1.4, caveats]
+    front: Trying RWKV on your own collection – which three numbers tell you whether it helps?
+    back: True retention at your target, reviews per day, minutes per day – compared against the same period with FSRS.

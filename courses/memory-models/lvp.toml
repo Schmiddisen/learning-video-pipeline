@@ -1,0 +1,20 @@
+[course]
+title = "How Memory Models Schedule Your Reviews"
+language = "en"   # narration and on-screen text
+series = "How Memory Models Schedule Your Reviews · Video {n}"
+
+[video]
+theme = "paper"           # paper | night | terminal
+
+[voice]
+provider = "openrouter"   # openrouter (Gemini TTS, needs OPENROUTER_API_KEY) | silent
+model = "google/gemini-3.8-flash-tts"
+voice = "Kore"
+speed = 1.15              # applied locally, free to change
+chars_per_second = 15.0
+
+[budget]
+max_usd_per_run = 0.50    # paid narration per command; voice_cache/FROZEN blocks all spending
+
+[pronunciation]
+# respellings for the voice only, e.g.  SQL = "sequel"   "e.g." = "for example"

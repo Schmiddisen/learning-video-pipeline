@@ -1,0 +1,235 @@
+labs:
+  - video: v1.1
+    title: From forgetting curve to interval
+    lang: python
+    goal: |
+      Use the FSRS-style power forgetting curve R(t, S) = (1 + F·t/S)^C with C = -0.5 and
+      F = 19/81 (so that R = 90 % exactly when t = S). Write `interval(S, dr)`: the number of
+      days until recall drops to the desired retention `dr`. Then see how much shorter the
+      intervals get when you raise desired retention from 0.90 to 0.95.
+    starter: |
+      C, F = -0.5, 19 / 81
+
+      def R(t, S):
+          return (1 + F * t / S) ** C
+
+      def interval(S, dr):
+          """Days until R(t, S) == dr. Solve the curve for t."""
+          # TODO
+          return 0.0
+
+      for dr in (0.80, 0.90, 0.95):
+          print(dr, round(interval(10, dr), 2), "days for a card with stability 10")
+    check: |
+      assert abs(R(10, 10) - 0.9) < 1e-9, "R(S, S) should be exactly 0.9 – did you change C or F?"
+      assert abs(interval(10, 0.9) - 10) < 1e-6, "at dr = 0.9 the interval equals the stability"
+      for S in (1, 7, 30):
+          for dr in (0.7, 0.85, 0.97):
+              assert abs(R(interval(S, dr), S) - dr) < 1e-9, "R(interval) must equal dr"
+      assert interval(10, 0.95) < 5, "0.95 should roughly halve the interval of a 0.90 setting"
+      print("ALL CHECKS PASSED")
+    hints:
+      - "Set (1 + F·t/S)^C = dr and isolate t: raise both sides to 1/C first."
+      - "dr ** (1 / C) = 1 + F·t/S, so t = S / F · (dr ** (1 / C) - 1)."
+      - "return S / F * (dr ** (1 / C) - 1)"
+    solution: |
+      C, F = -0.5, 19 / 81
+
+      def R(t, S):
+          return (1 + F * t / S) ** C
+
+      def interval(S, dr):
+          return S / F * (dr ** (1 / C) - 1)
+
+      for dr in (0.80, 0.90, 0.95):
+          print(dr, round(interval(10, dr), 2), "days for a card with stability 10")
+
+  - video: v1.2
+    title: Grade three fortune tellers
+    lang: python
+    goal: |
+      Write log loss, a simple binned calibration error and AUC, then grade three predictors on
+      simulated reviews: an honest model that knows each review's true recall probability, a
+      lazy one that always says the average, and a cheat that is right on average per bin but
+      says 0 % or 100 % per review. Watch which metric each one fools.
+    starter: |
+      import math, random
+      random.seed(7)
+
+      # simulated reviews: true probability p, outcome y (1 = recalled), bin = interval bucket
+      reviews = []
+      for _ in range(20_000):
+          b = random.randrange(5)
+          p = random.uniform(0.55, 0.98) - 0.05 * b
+          reviews.append((p, int(random.random() < p), b))
+
+      def log_loss(preds, ys):
+          eps = 1e-6
+          # TODO: mean of -(y ln p + (1-y) ln(1-p)), clip p to [eps, 1-eps]
+          return 0.0
+
+      def rmse_bins(preds, ys, bins):
+          # TODO: per bin, (mean pred - mean y)^2, weighted by bin size; sqrt of weighted mean
+          return 0.0
+
+      def auc(preds, ys):
+          # TODO: share of (recalled, forgotten) pairs where recalled got the higher prediction (ties = 1/2)
+          return 0.5
+
+      ys = [y for _, y, _ in reviews]
+      bins = [b for _, _, b in reviews]
+      honest = [p for p, _, _ in reviews]
+      avg = sum(ys) / len(ys)
+      lazy = [avg] * len(ys)
+      # the cheat: per bin, says 100 % on exactly as many reviews as were recalled, 0 % on the rest
+      cheat = [0.0] * len(ys)
+      for b in range(5):
+          idx = [i for i in range(len(ys)) if bins[i] == b]
+          k = sum(ys[i] for i in idx)
+          for j, i in enumerate(idx):
+              cheat[i] = 1.0 if j < k else 0.0
+
+      for name, pr in (("honest", honest), ("lazy", lazy), ("cheat", cheat)):
+          print(f"{name:7} LL {log_loss(pr, ys):.3f}  RMSE(bins) {rmse_bins(pr, ys, bins):.4f}  AUC {auc(pr, ys):.3f}")
+    check: |
+      ll_h, ll_l, ll_c = (log_loss(p, ys) for p in (honest, lazy, cheat))
+      r_h, r_l, r_c = (rmse_bins(p, ys, bins) for p in (honest, lazy, cheat))
+      a_h, a_l = auc(honest, ys), auc(lazy, ys)
+      assert abs(log_loss([0.9], [1]) - 0.10536) < 1e-4, "log loss of p=0.9, recalled should be 0.105"
+      assert abs(log_loss([0.9], [0]) - 2.30259) < 1e-4, "log loss of p=0.9, forgotten should be 2.303"
+      assert ll_h < ll_l < ll_c, "log loss should rank honest < lazy < cheat"
+      assert r_c < 1e-9, "the cheat matches every bin mean exactly – its RMSE(bins) should be 0"
+      assert r_h < r_l, "the honest model should be better calibrated per bin than the global average"
+      assert abs(a_l - 0.5) < 1e-9, "a constant prediction cannot rank: AUC exactly 0.5"
+      assert a_h > 0.6, "the honest model should rank clearly better than chance"
+      print("ALL CHECKS PASSED")
+    hints:
+      - "Log loss punishes confident mistakes: a forgotten card at p = 0.99 costs ln(100) ≈ 4.6."
+      - "For RMSE(bins) group indices by bin, compute mean(pred) - mean(y) per bin, square, multiply by the bin's size, sum, divide by n, take the square root. For AUC, sort by prediction and count ranks (or loop over pairs on a sample)."
+      - "AUC via ranks: sort indices by pred, give average ranks to ties, then AUC = (sum of ranks of positives - P(P+1)/2) / (P·N)."
+    solution: |
+      import math, random
+      random.seed(7)
+
+      # simulated reviews: true probability p, outcome y (1 = recalled), bin = interval bucket
+      reviews = []
+      for _ in range(20_000):
+          b = random.randrange(5)
+          p = random.uniform(0.55, 0.98) - 0.05 * b
+          reviews.append((p, int(random.random() < p), b))
+
+      def log_loss(preds, ys):
+          eps = 1e-6
+          s = 0.0
+          for p, y in zip(preds, ys):
+              p = min(max(p, eps), 1 - eps)
+              s -= y * math.log(p) + (1 - y) * math.log(1 - p)
+          return s / len(ys)
+
+      def rmse_bins(preds, ys, bins):
+          groups = {}
+          for p, y, b in zip(preds, ys, bins):
+              g = groups.setdefault(b, [0.0, 0.0, 0])
+              g[0] += p; g[1] += y; g[2] += 1
+          total = sum((sp / n - sy / n) ** 2 * n for sp, sy, n in groups.values())
+          return math.sqrt(total / len(ys))
+
+      def auc(preds, ys):
+          order = sorted(range(len(preds)), key=lambda i: preds[i])
+          ranks = [0.0] * len(preds)
+          i = 0
+          while i < len(order):
+              j = i
+              while j + 1 < len(order) and preds[order[j + 1]] == preds[order[i]]:
+                  j += 1
+              for k in range(i, j + 1):
+                  ranks[order[k]] = (i + j) / 2 + 1
+              i = j + 1
+          P = sum(ys); N = len(ys) - P
+          return (sum(r for r, y in zip(ranks, ys) if y) - P * (P + 1) / 2) / (P * N)
+
+      ys = [y for _, y, _ in reviews]
+      bins = [b for _, _, b in reviews]
+      honest = [p for p, _, _ in reviews]
+      avg = sum(ys) / len(ys)
+      lazy = [avg] * len(ys)
+      # the cheat: per bin, says 100 % on exactly as many reviews as were recalled, 0 % on the rest
+      cheat = [0.0] * len(ys)
+      for b in range(5):
+          idx = [i for i in range(len(ys)) if bins[i] == b]
+          k = sum(ys[i] for i in idx)
+          for j, i in enumerate(idx):
+              cheat[i] = 1.0 if j < k else 0.0
+
+      for name, pr in (("honest", honest), ("lazy", lazy), ("cheat", cheat)):
+          print(f"{name:7} LL {log_loss(pr, ys):.3f}  RMSE(bins) {rmse_bins(pr, ys, bins):.4f}  AUC {auc(pr, ys):.3f}")
+
+  - video: v1.3
+    title: A memory with a running sum
+    lang: python
+    goal: |
+      Implement the heart of RWKV's time mixing for one channel: a weighted average of past
+      values whose weights shrink by a factor e^(-w) per step. Do it twice – once the slow way
+      (recompute the sum over the whole history at every step, like attention) and once the
+      RNN way (carry a numerator and a denominator) – and show they agree. Then compare a
+      fast-decay and a slow-decay channel on the same review history.
+    starter: |
+      import math
+
+      # one channel: each step brings a key k (how important) and a value v (what it says)
+      history = [(0.0, 1.0), (0.5, 1.0), (0.0, 0.0), (1.0, 1.0), (0.2, 0.0), (0.0, 1.0)]
+
+      def wkv_slow(history, w):
+          """Output after each step: sum_i e^{-(t-i)w} e^{k_i} v_i / sum_i e^{-(t-i)w} e^{k_i}."""
+          out = []
+          # TODO: for each t, loop over all i <= t
+          return out
+
+      def wkv_rnn(history, w):
+          """Same outputs, but only carry (num, den) from step to step."""
+          out = []
+          num = den = 0.0
+          # TODO
+          return out
+
+      for w in (0.1, 2.0):
+          print("w =", w, [round(x, 3) for x in wkv_rnn(history, w)])
+    check: |
+      import random
+      for w in (0.05, 0.7, 3.0):
+          a, b = wkv_slow(history, w), wkv_rnn(history, w)
+          assert len(a) == len(b) == len(history), "one output per step"
+          assert all(abs(x - y) < 1e-9 for x, y in zip(a, b)), "slow and RNN versions must agree"
+      rnd = [(random.uniform(-1, 1), random.random()) for _ in range(200)]
+      assert all(abs(x - y) < 1e-9 for x, y in zip(wkv_slow(rnd, 0.3), wkv_rnn(rnd, 0.3)))
+      fast, slow = wkv_rnn(history, 3.0)[-1], wkv_rnn(history, 0.05)[-1]
+      assert fast > 0.9 and slow < fast, "a fast-decay channel should mostly echo the last value"
+      print("ALL CHECKS PASSED")
+    hints:
+      - "In the slow version the weight of step i at time t is exp(-(t - i) * w + k_i)."
+      - "In the RNN version first shrink the old sums, then add the new step: num = e^{-w}·num + e^{k}·v, den = e^{-w}·den + e^{k}."
+      - "for k, v in history: num = math.exp(-w) * num + math.exp(k) * v; den = math.exp(-w) * den + math.exp(k); out.append(num / den)"
+    solution: |
+      import math
+
+      history = [(0.0, 1.0), (0.5, 1.0), (0.0, 0.0), (1.0, 1.0), (0.2, 0.0), (0.0, 1.0)]
+
+      def wkv_slow(history, w):
+          out = []
+          for t in range(len(history)):
+              num = sum(math.exp(-(t - i) * w + k) * v for i, (k, v) in enumerate(history[: t + 1]))
+              den = sum(math.exp(-(t - i) * w + k) for i, (k, v) in enumerate(history[: t + 1]))
+              out.append(num / den)
+          return out
+
+      def wkv_rnn(history, w):
+          out = []
+          num = den = 0.0
+          for k, v in history:
+              num = math.exp(-w) * num + math.exp(k) * v
+              den = math.exp(-w) * den + math.exp(k)
+              out.append(num / den)
+          return out
+
+      for w in (0.1, 2.0):
+          print("w =", w, [round(x, 3) for x in wkv_rnn(history, w)])

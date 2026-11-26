@@ -1,0 +1,12 @@
+build/
+media/
+__pycache__/
+*.pyc
+.venv/
+voice_cache/*.tempo
+voice_cache/*.dryrun*
+voice_cache/.lvp-lock
+voice_cache/*_adjusted*
+# source material you are not allowed to publish:
+material/**/*.mp4
+material/**/*.pdf

@@ -1,0 +1,12 @@
+[project]
+name = "memory-models"
+version = "0.1.0"
+requires-python = ">=3.11,<3.14"
+dependencies = ["lvp @ git+https://github.com/Schmiddisen/learning-video-pipeline"]
+
+[project.optional-dependencies]
+material = ["lvp[material] @ git+https://github.com/Schmiddisen/learning-video-pipeline"]
+transcribe = ["lvp[transcribe] @ git+https://github.com/Schmiddisen/learning-video-pipeline"]
+
+[tool.uv]
+package = false
