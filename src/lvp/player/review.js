@@ -13,7 +13,7 @@
       ankiMode: "Review with Anki's schedule", ankiSync: "Sync AnkiWeb", ankiPush: "Add missing cards to Anki", ankiPushed: "added",
       ankiMapped: "cards matched in Anki", ankiPending: "reviews waiting to go to Anki", ankiSent: "sent", install: "Install as app",
       explainMiss: "I forgot this flashcard. Explain the idea behind it so it sticks – briefly, with a different angle than the card.",
-      dailyNew: "New cards per day", notify: "cards are due"
+      dailyNew: "New cards per day", notify: "cards are due", videoQuestions: "Video questions"
     },
     de: {
       title: "Wiederholen", due: "fällig", newToday: "neu heute", locked: "werden beim Schauen freigeschaltet", total: "Karten",
@@ -24,7 +24,7 @@
       ankiMode: "Mit Ankis Zeitplan wiederholen", ankiSync: "AnkiWeb synchronisieren", ankiPush: "Fehlende Karten zu Anki hinzufügen", ankiPushed: "hinzugefügt",
       ankiMapped: "Karten in Anki gefunden", ankiPending: "Wiederholungen warten auf Anki", ankiSent: "übertragen", install: "Als App installieren",
       explainMiss: "Ich habe diese Karteikarte vergessen. Erklär die Idee dahinter so, dass sie hängen bleibt – kurz und aus einem anderen Blickwinkel als die Karte.",
-      dailyNew: "Neue Karten pro Tag", notify: "Karten sind fällig"
+      dailyNew: "Neue Karten pro Tag", notify: "Karten sind fällig", videoQuestions: "Fragen aus den Videos"
     }
   };
   let T = S.en, course = null, fsrs = null, current = null, revealed = false, focusIds = null;
@@ -39,7 +39,7 @@
   const buildQuizCards = () => {
     quizCards = [];
     for (const v of course.videos) v.quizzes.forEach((q, i) => {
-      if (q.quiz === "check" && q.a) quizCards.push({ id: `q-${v.id}-${i}`, deck: `${course.title}::${LVP.videoLabel(v)}`, front: q.q, back: q.a, video: v.id, t: Math.max(0, q.t - 1), tags: ["video-question"] });
+      if (q.quiz === "check" && q.a) quizCards.push({ id: `q-${v.id}-${i}`, deck: `${course.title}::${T.videoQuestions}`, front: q.q, back: q.a, video: v.id, t: Math.max(0, q.t - 1), tags: ["video-question"] });
     });
   };
   const allCards = () => [...(course?.cards || []), ...quizCards, ...mine().cards];
@@ -168,7 +168,7 @@
     store.set("srs", st);
     current = null; revealed = false;
     render(); LVP.updateDue();
-    if (anki.mode()) anki.flush().then(render);
+    if (anki.ok) anki.flush().then(render);   // connected: every review goes to Anki right away
   }
   async function whyCard(c) {
     LVP.selectTab("ask");
