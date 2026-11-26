@@ -6,7 +6,7 @@
   const LVP = window.LVP, { $, el } = LVP;
   const S = {
     en: {
-      title: "Render on this PC", intro: "Renders the final videos on this computer from the recorded narration (never pays). Videos that already exist are skipped.",
+      title: "Render on this PC", intro: "Renders the final videos on this computer from the recorded narration (never pays). Videos that are already rendered and unchanged are skipped.", redo: "render all again",
       quality: { "4k30": "4K, 30 fps", "4k60": "4K, 60 fps", "1080p": "1080p" }, start: "Render", stop: "Stop", open: "Show the videos",
       finding: "Looking for the project folder…", notFound: "Project folder not found. Paste its path:", use: "Use this folder",
       pulling: "Getting the latest version…", pullFailed: "Could not update automatically – rendering the version on this PC.",
@@ -14,7 +14,7 @@
       install: "Install as app", needApp: "Rendering on your PC works in the installed app (Claude desktop app → artifact menu → Install as app)."
     },
     de: {
-      title: "Auf diesem PC rendern", intro: "Rendert die finalen Videos auf diesem Rechner aus der aufgenommenen Sprache (kostet nichts). Schon vorhandene werden übersprungen.",
+      title: "Auf diesem PC rendern", intro: "Rendert die finalen Videos auf diesem Rechner aus der aufgenommenen Sprache (kostet nichts). Schon gerenderte, unveränderte werden übersprungen.", redo: "alle neu rendern",
       quality: { "4k30": "4K, 30 fps", "4k60": "4K, 60 fps", "1080p": "1080p" }, start: "Rendern", stop: "Abbrechen", open: "Videos zeigen",
       finding: "Suche den Projektordner …", notFound: "Projektordner nicht gefunden. Pfad einfügen:", use: "Diesen Ordner nehmen",
       pulling: "Hole die neueste Version …", pullFailed: "Automatisches Aktualisieren ging nicht – rendere die Version auf diesem PC.",
@@ -48,13 +48,13 @@
     return (await desk.fs.exists(g).catch(() => false)) ? `"${g}"` : null;
   }
   function say(text, box) { status = text; render(box); }
-  async function start(box, quality, dir) {
+  async function start(box, quality, dir, redo) {
     log = []; say(T.pulling, box);
     const git = await gitCommand();
     const pull = git ? await desk.childProcess.exec(`${git} pull --ff-only`, { cwd: dir, timeout: 120000 }).catch(() => null) : null;
     if (!pull || pull.code !== 0) log.push(T.pullFailed);
     say(T.running, box);
-    const cmd = `${course.render || "uv run lvp"} --quality ${quality}`;
+    const cmd = `${course.render || "uv run lvp"} --quality ${quality}${redo ? " --redo" : ""}`;
     log.push("> " + cmd);
     proc = desk.childProcess.spawn(cmd, [], { cwd: dir, shell: true, env: { PYTHONUNBUFFERED: "1", PYTHONIOENCODING: "utf-8" } });
     const add = (chunk) => { for (const line of String(chunk).split(/\r?\n/)) if (line.trim()) log.push(line); if (log.length > 400) log = log.slice(-400); render(box); };
@@ -84,9 +84,10 @@
       const dir = local.repo && await desk.fs.exists(local.repo).catch(() => false) ? local.repo : await findRepo();
       if (!dir) { askPath(box); return; }
       LVP.store.set("local", { ...local, repo: dir }, true);
-      start(box, sel.value, dir);
+      start(box, sel.value, dir, rb.checked);
     };
-    row.append(sel, go);
+    const redo = el("label", "switch"); const rb = el("input"); rb.type = "checkbox"; rb.id = "render-redo"; redo.append(rb, document.createTextNode(" " + T.redo));
+    row.append(sel, go, redo);
     if (proc) { const k = el("button", "btn", T.stop); k.onclick = () => proc?.kill().catch(() => {}); row.append(k); }
     const repo = LVP.store.get("local")?.repo;
     if (repo) { const o = el("button", "btn", T.open); o.onclick = () => desk.shell.openPath(join(repo, "build", "videos")).catch(() => {}); row.append(o); }

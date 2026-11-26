@@ -128,7 +128,14 @@ def main(argv: list[str] | None = None) -> int:
                 break
             except ValueError:
                 print("  Not recognised – e.g. 12, 4-7, v2, 4,6 or a.")
-    done = [i for i in chosen if _output(videos[i][0], flags).exists()]
+    # rendered and still current: the output is newer than its scene file (a pulled change makes
+    # the scene file newer, so that video is rendered again)
+    done = [
+        i
+        for i in chosen
+        if _output(videos[i][0], flags).exists()
+        and _output(videos[i][0], flags).stat().st_mtime >= videos[i][0].stat().st_mtime
+    ]
     if (args.quality and not args.redo) or (
         len(chosen) > 1
         and done
@@ -136,6 +143,10 @@ def main(argv: list[str] | None = None) -> int:
     ):
         chosen = [i for i in chosen if i not in done]
 
+    if not chosen:
+        print("All chosen videos are already rendered and current – nothing to do.")
+        return 0
+    print(f"{len(chosen)} Video(s): " + ", ".join(videos[i][1] for i in chosen), flush=True)
     os.environ.setdefault("LVP_VOICE", "real")
     os.environ["LVP_VOICE_DRYRUN"] = "1"  # cached narration only – never pays
     jobs = os.cpu_count() or 4  # long sections are split into chunks: every thread gets work
