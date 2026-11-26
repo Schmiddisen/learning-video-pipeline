@@ -1,17 +1,15 @@
 /* RWKV memory model in the player: a JavaScript port of the RNN form of the RWKV-7 spaced
-   repetition model from open-spaced-repetition/srs-benchmark (rwkv/run_as_rnn.py,
-   rwkv/model/srs_model_rnn.py, rwkv/model/rwkv_rnn_model.py). It reads the whole review history
-   (every card, deck, note, the time of day, the daily load, answer times) and predicts the chance
-   of recalling a card right now. Weights: pretrain/RWKV_trained_on_101_4999.pth of that project,
-   loaded at run time from rwkv_weights.wasm – raw float32, named .wasm only so artifact hosting
-   serves it (not part of this repository).
-   Verified against the PyTorch original (tests: max difference ~1e-5). */
+   repetition model (open-spaced-repetition/srs-benchmark: rwkv/run_as_rnn.py and rwkv/model/;
+   the small models of the RWKV Anki fork JSchoreels/anki: rslib/src/rwkv/engine.rs). It reads the
+   whole review history (every card, deck, note, the time of day, the daily load, answer times) and
+   predicts the chance of recalling a card now and its forgetting curve after an answer.
+   Weights are loaded at run time from rwkv_weights.wasm (raw float32, named .wasm only so
+   artifact hosting serves it) and rwkv_weights.json; they are not part of this repository
+   (see src/lvp/rwkv_weights.py for their terms). Default: SM118, the fork's "Small" two-head model.
+   Verified: SM118 against the fork's published test vectors (max error 5e-7 on 1,000 rows, all
+   heads); the srs-benchmark checkpoint against its PyTorch original (1e-7). */
 "use strict";
 (function (root) {
-  const C = 128, H = 4, K = 32;
-  const MODULES = [   // order of rwkv_modules: [name, layers, channel mixer factor]
-    ["card_id", 3, 1.5], ["deck_id", 4, 2.0], ["note_id", 2, 1.5], ["preset_id", 3, 2.0], ["user_id", 4, 2.0],
-  ];
   const ID_DIMS = { card_id: 12, note_id: 12, deck_id: 8, preset_id: 8 };
   const ID_ORDER = ["card_id", "note_id", "deck_id", "preset_id"];
   const PERIODS = [3, 7, 30, 100, 365, 3650, 36500];
@@ -49,47 +47,54 @@
   }
   const map = (x, f) => { const y = new Float32Array(x.length); for (let i = 0; i < x.length; i++) y[i] = f(x[i], i); return y; };
   const lerp = (a, b, w) => map(a, (v, i) => v + w[i] * (b[i] - v));
+  const softmax = (x) => { const mx = Math.max(...x); const e = Array.from(x, (q) => Math.exp(q - mx)); const s = e.reduce((a, b) => a + b, 0); return e.map((q) => q / s); };
 
+  /* The network. Sizes, layer order, stripped channel mixers and the curve type come from the
+     weights, so one class runs both the srs-benchmark checkpoint (d_model 128, layers module by
+     module, a 128-point curve with a learned residual) and the small models of the RWKV Anki fork
+     (JSchoreels/anki, e.g. SM118: d_model 64, layers interleaved across modules, a mixture of
+     three power-law curves, input 22 zeroed). */
   class Model {
     constructor(manifest, buffer) {
-      const all = new Float32Array(buffer);
-      this.w = {};
-      for (const t of manifest) { const n = t.shape.reduce((a, b) => a * b, 1); this.w[t.name] = all.subarray(t.offset, t.offset + n); }
+      const all = new Float32Array(buffer), list = Array.isArray(manifest) ? manifest : manifest.tensors;
+      this.w = {}; this.shape = {};
+      for (const t of list) { const n = t.shape.reduce((a, b) => a * b, 1); this.w[t.name] = all.subarray(t.offset, t.offset + n); this.shape[t.name] = t.shape; }
+      this.C = this.shape["features2card.3.weight"][0];
+      const bonus = this.shape["rwkv_modules.0.blocks.0.time_mixer.bonus"]; this.H = bonus[2]; this.K = bonus[3];
+      this.layers = [0, 1, 2, 3, 4].map((m) => { let n = 0; while (this.w[`rwkv_modules.${m}.blocks.${n}.time_mixer.W_r.weight`]) n++; return n; });
+      // layer order: given by the export (interleaved) or module by module (srs-benchmark)
+      this.steps = manifest.steps || this.layers.flatMap((n, m) => Array.from({ length: n }, (_, l) => [m, l]));
+      this.zero = manifest.zero_features || [];
+      this.power = !!this.w.gru_w_weight;
       const raw = (sp, n) => Array.from({ length: n }, (_, i) => Math.exp(i * sp / (n - 1)));
       this.sSpace = raw(18.5, 128).map((r) => 0.1 + (r - 1) * Math.E ** (22 - 18.5));
       this.pSpace = raw(18.5, 128).map((r) => 0.5 + (r - 1) * Math.E ** (21 - 18.5));
     }
     p(name) { const v = this.w[name]; if (!v) throw new Error("missing weight " + name); return v; }
-
+    lin(name, x, bias = true) {   // y = W x (+ b); W [out, in]
+      const W = this.p(name + ".weight"), [out, inn] = this.shape[name + ".weight"];
+      return linear(W, bias ? this.p(name + ".bias") : null, x, out, inn);
+    }
     timeMixer(pre, layer, inp, v0, state) {
-      const P = (n) => this.p(pre + n);
+      const { C, H, K } = this, P = (n) => this.p(pre + n), L1 = (n, x, b) => this.lin(pre + n, x, b);
       const x = layerNorm(inp, P("layer_norm.weight"), P("layer_norm.bias"));
       const xs = state ? state.x : x, S0 = state ? state.S : new Float32Array(H * K * K);
       const L = P("rkvdag_lerp");   // [8, 1, 1, C]
       const m = [0, 1, 2, 3, 4, 5, 6, 7].map((j) => lerp(x, xs, L.subarray(j * C, (j + 1) * C)));
-      const r = linear(P("W_r.weight"), null, m[0], C, C);
-      const k0 = linear(P("W_k.weight"), null, m[1], C, C);
-      const ks = map(linear(P("k_scale_linear.weight"), P("k_scale_linear.bias"), m[6], H, C), sigmoid);
-      const vs = map(linear(P("v_scale_linear.weight"), P("v_scale_linear.bias"), m[7], H, C), sigmoid);
+      const r = L1("W_r", m[0], false), k0 = L1("W_k", m[1], false);
+      const ks = map(L1("k_scale_linear", m[6]), sigmoid), vs = map(L1("v_scale_linear", m[7]), sigmoid);
       let v;
-      if (layer === 0) { v = linear(P("W_v.weight"), null, m[2], C, C); v0 = v; }
-      else {
-        const vl = map(linear(P("v_lora_simple.B_and_lamb.weight"), P("v_lora_simple.B_and_lamb.bias"), linear(P("v_lora_simple.A.weight"), null, m[2], 8, C), C, 8), sigmoid);
-        v = lerp(linear(P("W_v.weight"), null, m[2], C, C), v0, vl);
-      }
-      const a = map(linear(P("a_lora_simple.B_and_lamb.weight"), P("a_lora_simple.B_and_lamb.bias"), linear(P("a_lora_simple.A.weight"), null, m[4], 16, C), C, 16), sigmoid);
-      const g = linear(P("lora_B_g.weight"), null, map(linear(P("lora_A_g.weight"), null, m[5], 16, C), sigmoid), C, 16);
-      const dl = linear(P("d_lora_mlp.B_and_lamb.weight"), P("d_lora_mlp.B_and_lamb.bias"), map(linear(P("d_lora_mlp.A.weight"), null, m[3], 16, C), Math.tanh), C, 16);
-      const w = map(dl, (z) => Math.exp(-Math.exp(-0.5 - softplus(-z))));
+      if (layer === 0) { v = L1("W_v", m[2], false); v0 = v; }
+      else v = lerp(L1("W_v", m[2], false), v0, map(L1("v_lora_simple.B_and_lamb", L1("v_lora_simple.A", m[2], false)), sigmoid));
+      const a = map(L1("a_lora_simple.B_and_lamb", L1("a_lora_simple.A", m[4], false)), sigmoid);
+      const g = L1("lora_B_g", map(L1("lora_A_g", m[5], false), sigmoid), false);
+      const w = map(L1("d_lora_mlp.B_and_lamb", map(L1("d_lora_mlp.A", m[3], false), Math.tanh)), (z) => Math.exp(-Math.exp(-0.5 - softplus(-z))));
       const kk = new Float32Array(C), kd = new Float32Array(C), vv = new Float32Array(C);
       for (let h = 0; h < H; h++) {
         let nk = 0, nv = 0;
         for (let i = 0; i < K; i++) { nk += k0[h * K + i] ** 2; nv += v[h * K + i] ** 2; }
         nk = Math.max(Math.sqrt(nk), 1e-12); nv = Math.max(Math.sqrt(nv), 1e-12);
-        for (let i = 0; i < K; i++) {
-          const j = h * K + i;
-          kd[j] = ks[h] * k0[j] / nk; vv[j] = vs[h] * v[j] / nv; kk[j] = kd[j] * a[j];
-        }
+        for (let i = 0; i < K; i++) { const j = h * K + i; kd[j] = ks[h] * k0[j] / nk; vv[j] = vs[h] * v[j] / nv; kk[j] = kd[j] * a[j]; }
       }
       // single_timestep: S' = S·diag(w) − (S·kd)(a∘kd)ᵀ + v kᵀ ; out = S'·r
       const S = new Float32Array(H * K * K), out = new Float32Array(C);
@@ -111,54 +116,57 @@
         let s = 0; for (let i = 0; i < K; i++) s += r[h * K + i] * bonus[h * K + i] * kk[h * K + i];
         for (let i = 0; i < K; i++) { const j = h * K + i; mix[j] = g[j] * (gn[j] + s * vv[j]); }
       }
-      const o2 = linear(P("W_o.weight"), null, mix, C, C);
+      const o2 = L1("W_o", mix, false);
       return { y: map(inp, (q, i) => q + o2[i]), v0, state: { x, S } };
     }
-    channelMixer(pre, inp, state, factor) {
-      const P = (n) => this.p(pre + n);
-      const x = layerNorm(inp, P("layer_norm.weight"), P("layer_norm.bias"));
-      const xs = state || x, kd = Math.round(factor * C);
-      const k = linear(P("W_k.weight"), null, lerp(x, xs, P("lerp_k")), kd, C);
-      const o = linear(P("W_v.weight"), null, map(k, (z) => (z > 0 ? z * z : 0)), C, kd);
+    channelMixer(pre, inp, state) {
+      if ((this.shape[pre + "W_k.weight"] || [1])[0] <= 1) return { y: inp, state: null };   // stripped in this export
+      const x = layerNorm(inp, this.p(pre + "layer_norm.weight"), this.p(pre + "layer_norm.bias"));
+      const k = this.lin(pre + "W_k", lerp(x, state || x, this.p(pre + "lerp_k")), false);
+      const o = this.lin(pre + "W_v", map(k, (z) => (z > 0 ? z * z : 0)), false);
       return { y: map(inp, (q, i) => q + o[i]), state: x };
     }
-    module(mi, inp, state) {
-      const [, layers, factor] = MODULES[mi], next = [];
-      let x = inp, v0 = null;
-      for (let l = 0; l < layers; l++) {
-        const pre = `rwkv_modules.${mi}.blocks.${l}.`, st = state ? state[l] : null;
-        const t = this.timeMixer(pre + "time_mixer.", l, x, v0, st && st.t);
-        v0 = t.v0;
-        const c = this.channelMixer(pre + "channel_mixer.", t.y, st && st.c, factor);
-        x = c.y; next.push({ t: t.state, c: c.state });
-      }
-      return { y: x, state: next };
-    }
     review(features, states) {
-      let x = linear(this.p("features2card.0.weight"), this.p("features2card.0.bias"), features, 512, 92);
-      x = map(x, (z) => z * sigmoid(z));
+      const f = Float32Array.from(features); for (const i of this.zero) f[i] = 0;
+      let x = map(this.lin("features2card.0", f), (z) => z * sigmoid(z));
       x = layerNorm(x, this.p("features2card.2.weight"), this.p("features2card.2.bias"));
-      x = map(linear(this.p("features2card.3.weight"), this.p("features2card.3.bias"), x, C, 512), (z) => z * sigmoid(z));
-      const next = [];
-      for (let mi = 0; mi < 5; mi++) { const r = this.module(mi, x, states[mi]); x = r.y; next.push(r.state); }
+      x = map(this.lin("features2card.3", x), (z) => z * sigmoid(z));
+      const next = this.layers.map(() => []), v0 = [null, null, null, null, null];
+      for (const [mi, l] of this.steps) {
+        const pre = `rwkv_modules.${mi}.blocks.${l}.`, st = states[mi] ? states[mi][l] : null;
+        const t = this.timeMixer(pre + "time_mixer.", l, x, v0[mi], st && st.t);
+        v0[mi] = t.v0;
+        const c = this.channelMixer(pre + "channel_mixer.", t.y, st && st.c);
+        x = c.y; next[mi][l] = { t: t.state, c: c.state };
+      }
       const z = layerNorm(x, this.p("prehead_norm.weight"), this.p("prehead_norm.bias"));
-      let hw = map(linear(this.p("head_w.0.weight"), this.p("head_w.0.bias"), z, C, C), (q) => Math.max(0, q));
+      let hw = map(this.lin("head_w.0", z), (q) => Math.max(0, q));
       hw = layerNorm(hw, this.p("head_w.2.weight"), this.p("head_w.2.bias"));
-      hw = linear(this.p("head_w.4.weight"), this.p("head_w.4.bias"), hw, 512, C);
-      const wl = linear(this.p("w_linear.weight"), this.p("w_linear.bias"), hw, 128, 512);
-      const mx = Math.max(...wl); let sum = 0; const ow = map(wl, (q) => { const e = Math.exp(q - mx); sum += e; return e; });
-      for (let i = 0; i < ow.length; i++) ow[i] /= sum;
-      const ah = linear(this.p("ahead_linear.weight"), this.p("ahead_linear.bias"), map(linear(this.p("head_ahead_logits.0.weight"), this.p("head_ahead_logits.0.bias"), z, 512, C), (q) => Math.max(0, q)), 128, 512);
-      const pl = linear(this.p("p_linear.weight"), this.p("p_linear.bias"), map(linear(this.p("head_p.0.weight"), this.p("head_p.0.bias"), z, 512, C), (q) => Math.max(0, q)), 4, 512);
-      return { ahead: ah, w: ow, p: pl, next };
+      hw = this.lin("head_w.4", hw);
+      let curve;
+      if (this.power) {
+        const L2 = (n) => linear(this.p(n + "_weight"), this.p(n + "_bias"), hw, 3, hw.length);
+        curve = { w: softmax(L2("gru_w")), s: L2("gru_s"), d: L2("gru_d") };
+      } else {
+        curve = { w: softmax(this.lin("w_linear", hw)), ahead: this.lin("ahead_linear", map(this.lin("head_ahead_logits.0", z), (q) => Math.max(0, q))) };
+      }
+      const probs = softmax(this.lin("p_linear", map(this.lin("head_p.0", z), (q) => Math.max(0, q))));
+      return { curve, probs, next };
     }
-    curveP(curve, elapsedSeconds) {   // predict_func: forgetting curve + learned residual
-      const les = Math.max(1, elapsedSeconds);
-      let s = 0; for (let i = 0; i < 128; i++) s += curve.w[i] * 0.9 ** (les / this.sSpace[i]);
+    /** chance of recall elapsedSeconds after the review the curve belongs to */
+    curveP(curve, elapsedSeconds) {
+      const t = Math.max(1, elapsedSeconds), cl = (q) => Math.min(25, Math.max(-25, q));
+      if (curve.s) {   // mixture of power laws: Σ w·(1 + t/S)^(−D)
+        let raw = 0;
+        for (let i = 0; i < curve.w.length; i++) raw += curve.w[i] * Math.exp(-Math.exp(cl(curve.d[i])) * Math.log1p(t / (1e-7 + Math.exp(cl(curve.s[i])))));
+        raw = 1e-5 + (1 - 2e-5) * raw;
+        return sigmoid(Math.log(raw / (1 - raw)) + 1e-5);
+      }
+      let s = 0; for (let i = 0; i < 128; i++) s += curve.w[i] * 0.9 ** (t / this.sSpace[i]);
       const cp = 1e-5 + (1 - 2e-5) * s;
-      let ri = this.pSpace.findIndex((x) => x >= les); if (ri < 0) ri = 127;
+      let ri = this.pSpace.findIndex((q) => q >= t); if (ri < 0) ri = 127;
       const li = Math.max(0, ri - 1), xl = this.pSpace[li], xr = this.pSpace[ri], yl = curve.ahead[li], yr = curve.ahead[ri];
-      const res = 1e-5 + (1 - 2e-5) * (yl + (yr - yl) * (les - xl) / (xr - xl));
+      const res = 1e-5 + (1 - 2e-5) * (yl + (yr - yl) * (t - xl) / (xr - xl));
       return sigmoid(Math.log(cp / (1 - cp)) + res);
     }
   }
@@ -211,8 +219,7 @@
       const st = [this.card[row.card_id], this.deck[row.deck_id], this.note[row.note_id], this.preset[row.preset_id], this.global];
       const out = this.m.review(x, st);
       if (!skip) { [this.card[row.card_id], this.deck[row.deck_id], this.note[row.note_id], this.preset[row.preset_id], this.global] = out.next; }
-      const mx = Math.max(...out.p); const e = Array.from(out.p, (q) => Math.exp(q - mx)); const s = e.reduce((a, b) => a + b, 0);
-      return { curve: { ahead: out.ahead, w: out.w }, pNow: 1 - e[0] / s };
+      return { curve: out.curve, pNow: 1 - out.probs[0], probs: out.probs };
     }
     /** Chance of recall if the card were shown now (RWKV-P); does not change the state. */
     immediate(r) { const row = this.same(r); return this.run(row, this.features(row, 0, [0, 0, 0, 0], 0, 1), true).pNow; }

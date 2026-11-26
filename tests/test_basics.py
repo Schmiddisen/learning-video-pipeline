@@ -193,3 +193,20 @@ def test_library_merge_keeps_other_courses(tmp_path, monkeypatch):
     assert [(c["slug"], c["title"]) for c in lib["courses"]] == [
         ("", "Krypto"), ("paper", "Attention"), ("bayes", "Bayes")]  # fmt: skip
     assert lib["courses"][1]["path"] == "courses/paper/"
+
+
+def test_rwkv_js_matches_fork_test_vectors():
+    """SM118 in rwkv.js against the RWKV Anki fork's published vectors. Needs a checkout of
+    JSchoreels/anki (its weights are not ours to ship): set LVP_RWKV_FORK=/path/to/anki."""
+    import os
+    import shutil
+
+    import pytest
+
+    fork, node = os.environ.get("LVP_RWKV_FORK"), shutil.which("node")
+    if not fork or not node:
+        pytest.skip("set LVP_RWKV_FORK to a checkout of JSchoreels/anki (and install node)")
+    script = ROOT / "tests" / "rwkv_vectors.js"
+    out = subprocess.run([node, str(script), fork, "sm118"], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    assert float(out.stdout.split()[-1]) < 1e-5, out.stdout

@@ -376,7 +376,10 @@ def main(argv: list[str] | None = None) -> int:
                     "(one player for many courses; default: the course at the root)")  # fmt: skip
     ap.add_argument("--library", type=Path,
                     help="library.json of the published player to merge into")  # fmt: skip
-    ap.add_argument("--no-rwkv", action="store_true", help="skip the RWKV memory model (~11 MB)")
+    ap.add_argument("--no-rwkv", action="store_true", help="skip the RWKV memory model")
+    ap.add_argument("--rwkv-model", default=rwkv_weights.DEFAULT_MODEL,
+                    choices=[*rwkv_weights.MODELS, "srs-benchmark"],
+                    help="RWKV model (default: sm118 of the RWKV Anki fork)")  # fmt: skip
     ap.add_argument("--only-data", action="store_true",
                     help="rewrite course.json and the page only (videos exported)")  # fmt: skip
     args = ap.parse_args(argv)
@@ -401,7 +404,7 @@ def main(argv: list[str] | None = None) -> int:
     labs_dir = args.labs or ROOT / "labs"
     labs = labs_for(labs_dir, videos) if labs_dir.exists() else []
     python = not args.no_python and _pyodide(OUT / "pyodide")
-    rwkv = not args.no_rwkv and rwkv_weights.ensure(OUT)
+    rwkv = not args.no_rwkv and rwkv_weights.ensure(OUT, args.rwkv_model)
     course = {"format": FORMAT, "title": title, "language": s.language, "videos": videos,
               "cards": cards, "labs": labs, "learner": learner, "python": python,
               "rwkv": rwkv,

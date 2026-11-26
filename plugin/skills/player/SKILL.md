@@ -37,9 +37,12 @@ Writes `build/player/`: `index.html`, `app.js`, `review.js`, `labs.js`, `exam.js
 `lab-worker.js`, `fsrs.js` (the page; ts-fsrs is bundled, MIT), `course.json` (timeline per video, cards linked to their moment,
 authored labs, the learner profile), `videos/*.mp4` (≤ 14 MB each) and `pyodide/` (Python
 for the labs, downloaded once; `--no-python` for JavaScript-only labs), `rwkv.js`,
-`rwkv-worker.js` and `rwkv_weights.wasm` (raw float32) + `rwkv_weights.json` (the RWKV memory model of
-open-spaced-repetition/srs-benchmark, downloaded once and converted without torch, ~11 MB;
-`--no-rwkv` to leave it out). Older builds work too: text, word timings and question times
+`rwkv-worker.js` and `rwkv_weights.wasm` (raw float32) + `rwkv_weights.json` (the RWKV memory
+model: by default SM118, the "Small" two-head model of the RWKV Anki fork JSchoreels/anki,
+~1.3 MB; `--rwkv-model srs-benchmark` for the srs-benchmark checkpoint, ~11 MB; downloaded once,
+hash-checked, converted without torch; `--no-rwkv` to leave it out). The weights are for the
+learner's own use only (trained on Anki's review dataset; shipping them in an app needs Anki's
+permission) – never commit or share them. Older builds work too: text, word timings and question times
 are reconstructed.
 
 ## 2. Publish as an artifact
@@ -76,7 +79,13 @@ learner opens it). Tell the user:
   pending reviews go to Anki the next time it connects.
 - **Scheduler** (Review → settings): FSRS, or RWKV – a neural memory model that replays the
   whole review history (Anki's review log when Anki's decks are on) in a worker and shows the
-  cards most at risk first, at a chosen target recall; answers still go to Anki.
+  cards most at risk first, at a chosen target recall; answers still go to Anki. Due cards
+  are **live** by default, as RWKV-Instant in the RWKV Anki fork (JSchoreels/anki): eligible
+  while predicted recall ≤ target, lowest recall ÷ target first, a card returns only after 5
+  other answers and 30 s – the count is a snapshot and can fall faster than one per answer or
+  rise. **Fixed per day** is the alternative (built once a day; one fewer per answer). The
+  history replay follows the fork: graded revlog types 0–5 without cram (type 3, factor 0),
+  from each card's last fresh start.
 - dictation works on desktop Chromium and the desktop app.
 
 Re-run 1–2 (same URL) when videos change; the learner's progress is kept. Use the `coach`

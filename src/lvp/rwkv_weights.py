@@ -1,9 +1,17 @@
 """Weights for the RWKV memory model in the player (rwkv.js).
 
-Downloads the pretrained RWKV-7 spaced-repetition model of open-spaced-repetition/srs-benchmark
-and converts the PyTorch checkpoint to a flat float32 file plus a JSON manifest, without torch:
-a .pth file is a zip archive holding a pickle (tensor layout) and one raw buffer per storage.
-The weights are cached in ~/.cache/lvp and never committed here.
+Two models, both converted to a flat float32 file plus a JSON manifest, without torch:
+
+- ``sm118`` (default): the "Small" two-head model of the RWKV Anki fork (JSchoreels/anki,
+  qt/aqt/rwkv_inference/sm118): d_model 64, ~332k parameters, a mixture of three power-law
+  forgetting curves. Its export is a simple tensor container (``ARWKVWEIGHTS1``).
+- ``srs-benchmark``: the pretrained RWKV-7 checkpoint of open-spaced-repetition/srs-benchmark
+  (a .pth zip: a pickle with the tensor layout and one raw buffer per storage).
+
+Weights notice (JSchoreels/anki, WEIGHTS-NOTICE.md): the trained weights are not under an open
+license; they follow the terms of the anki-revlogs-10k data they were trained on, which allow
+personal use and individual research. Shipping them in an application needs Anki's permission.
+So they are downloaded on the learner's machine for their own player and never committed here.
 """
 
 from __future__ import annotations
@@ -11,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 import pickle
+import struct
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -22,6 +31,16 @@ URL = (
 )
 SHA256 = "82d60a4de2e26b4064b86359874e458d1546c0e9651c5dbdf9b8f449a9b97114"
 CACHE = Path.home() / ".cache" / "lvp"
+
+FORK_COMMIT = "36c4f39d7a9880063656981b7d1f35dd23a38007"
+FORK_URL = f"https://raw.githubusercontent.com/JSchoreels/anki/{FORK_COMMIT}/qt/aqt/rwkv_inference/"
+MODELS = {  # name: {file: sha256} (hashes as published in the fork's manifest.json)
+    "sm118": {
+        "weights.f32.bin": "379168c80e8d546ebac892adda49e9a012b71c92b44cf8c9f94d4202f2530c3c",
+        "architecture.json": "9bd41f1189dc0113277d371223ce805612aaec07101804160fe86312eed15de3",
+    },
+}
+DEFAULT_MODEL = "sm118"
 
 
 class _Storage:
@@ -84,27 +103,89 @@ def _read_pth(path: Path) -> tuple[list[dict], bytes]:
     return manifest, b"".join(chunks)
 
 
-def ensure(dst: Path) -> bool:
+def _download(url: str, sha256: str, what: str) -> bytes | None:
+    try:
+        with urllib.request.urlopen(url, timeout=120) as r:  # noqa: S310 - fixed https URL
+            data = r.read()
+    except OSError as e:
+        print(f"[!] RWKV download failed ({e}) – the player offers FSRS only")
+        return None
+    if hashlib.sha256(data).hexdigest() != sha256:
+        print(f"[!] RWKV {what} has an unexpected checksum – skipped")
+        return None
+    return data
+
+
+def _read_fork_export(data: bytes) -> tuple[list[dict], bytes]:
+    """The fork's tensor container: magic, count, then name, rank, shape and float32 values."""
+    if not data.startswith(b"ARWKVWEIGHTS1"):
+        raise ValueError("not an ARWKVWEIGHTS1 export")
+    pos, manifest, chunks, offset = 13, [], [], 0
+
+    def take(fmt: str):
+        nonlocal pos
+        size = struct.calcsize(fmt)
+        value = struct.unpack_from(fmt, data, pos)
+        pos += size
+        return value
+
+    (count,) = take("<I")
+    for _ in range(count):
+        (name_len,) = take("<H")
+        name = data[pos : pos + name_len].decode()
+        pos += name_len
+        (rank,) = take("<B")
+        shape = list(take(f"<{rank}I")) if rank else []
+        n = 1
+        for d in shape:
+            n *= d
+        chunks.append(data[pos : pos + 4 * n])
+        pos += 4 * n
+        manifest.append({"name": name, "shape": shape, "offset": offset})
+        offset += n
+    if pos != len(data):
+        raise ValueError("trailing bytes in weights export")
+    return manifest, b"".join(chunks)
+
+
+def _build(model: str) -> tuple[dict | list, bytes] | None:
+    if model == "srs-benchmark":
+        pth = CACHE / "RWKV_trained_on_101_4999.pth"
+        if not pth.exists():
+            print("[…] downloading the RWKV memory model (srs-benchmark, once, ~22 MB)")
+            data = _download(URL, SHA256, "checkpoint")
+            if data is None:
+                return None
+            pth.write_bytes(data)
+        return _read_pth(pth)
+    files = MODELS[model]
+    print(f"[…] downloading the RWKV memory model ({model} of the RWKV Anki fork, once, ~1.4 MB)")
+    got = {f: _download(FORK_URL + f"{model}/{f}", h, f) for f, h in files.items()}
+    if any(v is None for v in got.values()):
+        return None
+    tensors, blob = _read_fork_export(got["weights.f32.bin"])
+    arch = json.loads(got["architecture.json"])
+    manifest = {
+        "format": 2,
+        "model": model,
+        "tensors": tensors,
+        "steps": arch["layer_steps"],
+        "zero_features": arch.get("zero_features", []),
+    }
+    return manifest, blob
+
+
+def ensure(dst: Path, model: str = DEFAULT_MODEL) -> bool:
     """Write rwkv_weights.wasm (raw float32) and rwkv_weights.json into dst; False if offline."""
     # raw float32, named .wasm: artifact hosting serves no .bin (fetched as an ArrayBuffer anyway)
     bin_path, man_path = dst / "rwkv_weights.wasm", dst / "rwkv_weights.json"
-    cache_bin, cache_man = CACHE / "rwkv_weights.bin", CACHE / "rwkv_weights.json"
+    cache_bin, cache_man = CACHE / f"rwkv-{model}.bin", CACHE / f"rwkv-{model}.json"
     if not (cache_bin.exists() and cache_man.exists()):
         CACHE.mkdir(parents=True, exist_ok=True)
-        pth = CACHE / "RWKV_trained_on_101_4999.pth"
-        if not pth.exists():
-            try:
-                print("[…] downloading the RWKV memory model (srs-benchmark, once, ~22 MB)")
-                with urllib.request.urlopen(URL, timeout=120) as r:  # noqa: S310 - fixed https URL
-                    data = r.read()
-            except OSError as e:
-                print(f"[!] RWKV download failed ({e}) – the player offers FSRS only")
-                return False
-            if hashlib.sha256(data).hexdigest() != SHA256:
-                print("[!] RWKV download has an unexpected checksum – skipped")
-                return False
-            pth.write_bytes(data)
-        manifest, blob = _read_pth(pth)
+        built = _build(model)
+        if built is None:
+            return False
+        manifest, blob = built
         cache_bin.write_bytes(blob)
         cache_man.write_text(json.dumps(manifest))
     dst.mkdir(parents=True, exist_ok=True)
