@@ -108,6 +108,8 @@
             const got = r.ok ? Number(r.out.trim()) : NaN;
             if (!Number.isFinite(got)) return `step ${i + 1}: calc "${st.calc}" does not evaluate: ${r.out.slice(0, 200)}`;
             if (!close(got, want, Math.max(Number(st.tol) || 0.01, 0.005))) return `step ${i + 1}: answer ${st.answer} but calc gives ${got}`;
+            // the computed value is the truth: small slips inside the tolerance must not reach the learner
+            if (got !== want) st.answer = String(Number(got.toPrecision(4)));
           }
         }
       }
