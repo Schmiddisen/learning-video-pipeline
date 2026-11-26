@@ -155,7 +155,29 @@
     row.append(document.createTextNode(T.dailyNew + " "), inp); box.append(row);
   }
   const span = (ms) => { const m = ms / 60000; if (m < 60) return `${Math.max(1, Math.round(m))} min`; const h = m / 60; if (h < 24) return `${Math.round(h)} h`; const d = h / 24; return d < 30 ? `${Math.round(d)} d` : `${(d / 30).toFixed(1)} mo`; };
-  const reviveCard = (s) => ({ ...s, due: new Date(s.due), last_review: s.last_review ? new Date(s.last_review) : undefined });
+  // a stored state the scheduler can work with (repairs states without stability, e.g. old imports)
+  const reviveCard = (s) => {
+    const c = { ...s, due: new Date(s.due), last_review: s.last_review ? new Date(s.last_review) : undefined };
+    if (c.state !== 0 && !(c.stability > 0)) c.stability = Math.max(1, c.scheduled_days || 1);
+    if (c.state !== 0 && !(c.difficulty >= 1)) c.difficulty = 5;
+    if (c.state !== 0 && !c.last_review) c.last_review = new Date(c.due.getTime() - c.stability * 864e5);
+    return c;
+  };
+  // Anki's view of a card → an FSRS state: interval ≈ stability (at 90 % retention), ease → difficulty
+  function fromAnki(ci, isDue) {
+    const now = Date.now(), ivl = Math.max(1, ci.interval || 1);
+    const ease = (ci.factor || 2500) / 1000;
+    const learning = ci.type === 1 || ci.type === 3;
+    const stability = learning ? 1 : ivl;
+    const due = isDue ? now : now + Math.max(1, ivl / 2) * 864e5;
+    return {
+      state: ci.type === 3 ? 3 : learning ? 1 : 2, stability,
+      difficulty: Math.min(10, Math.max(1, 11 - (ease - 1.3) * 5)),
+      reps: ci.reps || 1, lapses: ci.lapses || 0, learning_steps: 0,
+      elapsed_days: 0, scheduled_days: learning ? 0 : ivl,
+      due: new Date(due).toISOString(), last_review: new Date(due - stability * 864e5).toISOString(),
+    };
+  }
   function rate(c, grade) {
     const st = srs(), now = new Date();
     const wasNew = !st.cards[c.id] || st.cards[c.id].state === 0;
@@ -196,6 +218,7 @@
       try {
         await anki.call("version"); anki.ok = true; anki.status = T.ankiOn;
         await anki.match(); await anki.flush();
+        if (settings().ankiMode) await anki.pull().catch(() => {});
       } catch { anki.ok = false; anki.status = T.ankiNo; }
       render();
     },
@@ -237,11 +260,8 @@
         const due = await anki.call("areDue", { cards: ids.slice(i, i + 200) });
         info.forEach((ci, k) => {
           const id = Object.keys(anki.map).find((x) => anki.map[x][0] === ci.cardId); if (!id) return;
-          const s = st.cards[id] || { ...F.createEmptyCard(new Date()), due: new Date().toISOString() };
           if (ci.type === 0) return; // new in Anki: the player's own unlocking decides
-          s.state = s.state || 2;
-          s.due = due[k] ? new Date().toISOString() : new Date(Date.now() + Math.max(1, ci.interval || 1) * 864e5 / 2).toISOString();
-          st.cards[id] = s;
+          st.cards[id] = fromAnki(ci, !!due[k]);
         });
       }
       store.set("srs", st, true);
@@ -298,6 +318,15 @@
   LVP.hooks.ready.push(async (c, fromAccount) => {
     course = c; T = S[(c.language || "en").slice(0, 2)] || S.en;
     buildQuizCards();
+    let repaired = 0;
+    for (const [id, s] of Object.entries(srs().cards)) {
+      if (s.state !== 0 && !(s.stability > 0 && s.difficulty >= 1)) {
+        const r = reviveCard(s);
+        srs().cards[id] = { ...s, stability: r.stability, difficulty: r.difficulty, last_review: r.last_review.toISOString() };
+        repaired++;
+      }
+    }
+    if (repaired) store.set("srs", srs(), true);
     if (F && !fsrs) fsrs = F.fsrs(F.generatorParameters({ request_retention: 0.9, enable_fuzz: true }));
     LVP.updateDue();
     if (fromAccount || anki.desktop !== null) return;
