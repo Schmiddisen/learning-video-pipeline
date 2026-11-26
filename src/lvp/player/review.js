@@ -97,9 +97,7 @@
   };
   LVP.updateDue = () => {
     const n = LVP.review.dueCount(), pill = $("due-pill");
-    pill.hidden = !n; pill.textContent = `${n} ${T.due}`; pill.onclick = () => LVP.selectTab("review");
-    const tab = $("tabs").querySelector('[data-panel="review"]');
-    if (tab) { tab.textContent = LVP.L.tabs.review; if (n) tab.append(el("span", "count", String(n))); }
+    pill.textContent = LVP.L.reviewNav + (n ? ` · ${n} ${T.due}` : ""); pill.onclick = () => LVP.selectTab("review");
   };
 
   /* --- rendering a card --- */

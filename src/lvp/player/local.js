@@ -11,6 +11,7 @@
       finding: "Looking for the project folder…", notFound: "Project folder not found. Paste its path:", use: "Use this folder",
       pulling: "Getting the latest version…", pullFailed: "Could not update automatically – rendering the version on this PC.",
       running: "Rendering – this can take a while; you can keep studying.", done: "Done.", failed: "Stopped with an error – see the log.",
+      folder: "Project folder:", noGit: "git not found – using the version on this PC.", outdated: "This PC has an old version of the project. In GitHub Desktop: Fetch origin, then Pull origin – then press Render again.",
       install: "Install as app", needApp: "Rendering on your PC works in the installed app (Claude desktop app → artifact menu → Install as app)."
     },
     de: {
@@ -19,6 +20,7 @@
       finding: "Suche den Projektordner …", notFound: "Projektordner nicht gefunden. Pfad einfügen:", use: "Diesen Ordner nehmen",
       pulling: "Hole die neueste Version …", pullFailed: "Automatisches Aktualisieren ging nicht – rendere die Version auf diesem PC.",
       running: "Rendert – das kann dauern; du kannst weiterlernen.", done: "Fertig.", failed: "Mit Fehler beendet – siehe Protokoll.",
+      folder: "Projektordner:", noGit: "git nicht gefunden – nehme die Version auf diesem PC.", outdated: "Auf diesem PC liegt eine alte Version des Projekts. In GitHub Desktop: Fetch origin, dann Pull origin – danach noch einmal Rendern.",
       install: "Als App installieren", needApp: "Rendern auf dem PC geht in der installierten App (Claude-Desktop-App → Artefakt-Menü → Als App installieren)."
     }
   };
@@ -48,19 +50,32 @@
     return (await desk.fs.exists(g).catch(() => false)) ? `"${g}"` : null;
   }
   function say(text, box) { status = text; render(box); }
+  const clean = (t) => String(t || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   async function start(box, quality, dir, redo) {
-    log = []; say(T.pulling, box);
+    log = [T.folder + " " + dir]; say(T.pulling, box);
     const git = await gitCommand();
-    const pull = git ? await desk.childProcess.exec(`${git} pull --ff-only`, { cwd: dir, timeout: 120000 }).catch(() => null) : null;
-    if (!pull || pull.code !== 0) log.push(T.pullFailed);
+    if (!git) log.push(T.noGit);
+    else {
+      const pull = await desk.childProcess.exec(`${git} pull --ff-only`, { cwd: dir, timeout: 120000 }).catch((e) => ({ code: -1, stderr: String(e && e.message || e) }));
+      log.push(...clean(pull.stdout).slice(-3), ...clean(pull.stderr).slice(-3));
+      if (pull.code !== 0) log.push(T.pullFailed);
+    }
+    // the menu must know the options the player passes – an old checkout does not
+    const base = course.render || "uv run lvp";
+    const help = await desk.childProcess.exec(`${base} --help`, { cwd: dir, timeout: 300000 }).catch((e) => ({ code: -1, stdout: "", stderr: String(e && e.message || e) }));
+    if (!/--quality/.test((help.stdout || "") + (help.stderr || ""))) {
+      log.push(...clean(help.stderr).slice(-4), T.outdated); proc = null; say(T.failed, box); return;
+    }
     say(T.running, box);
-    const cmd = `${course.render || "uv run lvp"} --quality ${quality}${redo ? " --redo" : ""}`;
-    log.push("> " + cmd);
-    proc = desk.childProcess.spawn(cmd, [], { cwd: dir, shell: true, env: { PYTHONUNBUFFERED: "1", PYTHONIOENCODING: "utf-8" } });
-    const add = (chunk) => { for (const line of String(chunk).split(/\r?\n/)) if (line.trim()) log.push(line); if (log.length > 400) log = log.slice(-400); render(box); };
+    const args = `--quality ${quality}${redo ? " --redo" : ""}`;
+    // the normal environment of this PC (PATH etc.), plus unbuffered UTF-8 output
+    const cmd = sep === "\\" ? `set PYTHONUNBUFFERED=1&& set PYTHONIOENCODING=utf-8&& ${base} ${args}` : `PYTHONUNBUFFERED=1 PYTHONIOENCODING=utf-8 ${base} ${args}`;
+    log.push("> " + base + " " + args);
+    proc = desk.childProcess.spawn(cmd, [], { cwd: dir, shell: true });
+    const add = (chunk) => { log.push(...clean(chunk)); if (log.length > 400) log = log.slice(-400); render(box); };
     proc.stdout.on("data", add); proc.stderr.on("data", add);
     proc.on("error", (e) => { log.push(String(e && e.message || e)); proc = null; say(T.failed, box); });
-    proc.on("exit", (code) => { proc = null; say(code === 0 ? T.done : T.failed, box); });
+    proc.on("exit", (code) => { proc = null; log.push(`exit ${code}`); say(code === 0 ? T.done : T.failed, box); });
   }
 
   function render(box = $("local-box")) {

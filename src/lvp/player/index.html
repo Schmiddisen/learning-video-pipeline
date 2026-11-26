@@ -34,6 +34,14 @@
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
+/* review is its own page: full width, the video and the side panel step aside */
+body.review-mode main { grid-template-columns: minmax(0, 1fr); }
+body.review-mode main > section:not(#review-page), body.review-mode aside { display: none !important; }
+#review-page { max-width: 980px; width: 100%; margin: 0 auto; }
+#review { display: flex; flex-direction: column; gap: 14px; }
+body.review-mode .flash { padding: 28px; }
+body.review-mode .flash .front { font-size: 22px; }
+body.review-mode .flash .back { font-size: 19px; }
 body {
   background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f-body);
   padding-left: max(16px, env(safe-area-inset-left, 0px));
@@ -196,10 +204,12 @@ aside { background: var(--surface); border: 1px solid var(--line); border-radius
     <select id="video-select" aria-label="Video"></select>
     <button class="iconbtn" id="next" aria-label="Next video">&#8594;</button>
   </div>
-  <button class="duepill" id="due-pill" hidden></button>
+  <button class="duepill" id="due-pill"></button>
+  <button class="btn" id="back-to-video" hidden></button>
 </header>
 
 <main>
+  <section id="review-page" hidden aria-label="Review"><div id="review"></div></section>
   <section aria-label="Video">
     <div id="player">
     <div class="stage" id="stage">
@@ -236,7 +246,6 @@ aside { background: var(--surface); border: 1px solid var(--line); border-radius
     <div class="tabs" role="tablist" id="tabs">
       <button role="tab" data-panel="ask" aria-selected="true"></button>
       <button role="tab" data-panel="map" aria-selected="false"></button>
-      <button role="tab" data-panel="review" aria-selected="false"></button>
       <button role="tab" data-panel="lab" aria-selected="false"></button>
       <button role="tab" data-panel="course" aria-selected="false"></button>
     </div>
@@ -255,7 +264,6 @@ aside { background: var(--surface); border: 1px solid var(--line); border-radius
       </div>
     </div>
     <div class="panel" id="panel-map" hidden><div class="scroll" id="map"></div></div>
-    <div class="panel" id="panel-review" hidden><div class="scroll" id="review"></div></div>
     <div class="panel" id="panel-lab" hidden><div class="scroll" id="lab"></div></div>
     <div class="panel" id="panel-course" hidden><div class="scroll" id="course"></div></div>
   </aside>

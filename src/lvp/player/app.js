@@ -52,6 +52,7 @@ const STR = {
       "Today: what to do next, your weak spots and exam practice.",
     ],
     winDictation: "Press Windows + H to dictate into this box.",
+    backToVideo: "Back to the video", reviewNav: "Review",
     session: "Start a study session", sessionNext: "Reviews done – on to the video",
     skippedOne: "You jumped over a question – answer it now?", skippedMany: "questions jumped over – answer them now?",
     concepts: "How well you remember each concept", cardsSeen: "cards learned", practiseConcept: "Practise this concept now"
@@ -105,6 +106,7 @@ const STR = {
       "Heute: was als Nächstes dran ist, deine Schwachstellen und Klausurtraining.",
     ],
     winDictation: "Windows + H drücken, um in dieses Feld zu diktieren.",
+    backToVideo: "Zurück zum Video", reviewNav: "Wiederholen",
     session: "Lerneinheit starten", sessionNext: "Wiederholung erledigt – weiter zum Video",
     skippedOne: "Du hast eine Frage übersprungen – jetzt beantworten?", skippedMany: "Fragen übersprungen – jetzt beantworten?",
     concepts: "Wie gut du jedes Konzept behältst", cardsSeen: "Karten gelernt", practiseConcept: "Dieses Konzept jetzt üben"
@@ -703,12 +705,19 @@ LVP.openCardDraft = openCardDraft;
 
 /* ---------- side panels ---------- */
 function selectTab(name) {
+  // review is a page of its own; every other name is a side-panel tab next to the video
+  const review = name === "review";
+  document.body.classList.toggle("review-mode", review);
+  $("review-page").hidden = !review; $("back-to-video").hidden = !review; $("due-pill").hidden = review;
+  if (review) { if (!video.paused) video.pause(); LVP.panels.review?.(); window.scrollTo({ top: 0 }); return; }
   for (const b of $("tabs").querySelectorAll("button")) { const on = b.dataset.panel === name; b.setAttribute("aria-selected", String(on)); $("panel-" + b.dataset.panel).hidden = !on; }
   LVP.panels[name]?.();
 }
+$("back-to-video") && ($("back-to-video").onclick = () => selectTab("ask"));
 LVP.selectTab = selectTab;
 for (const b of $("tabs").querySelectorAll("button")) b.onclick = () => selectTab(b.dataset.panel);
 function refreshPanels() {
+  if (document.body.classList.contains("review-mode")) LVP.panels.review?.();
   const open = [...$("tabs").querySelectorAll("button")].find((b) => b.getAttribute("aria-selected") === "true")?.dataset.panel;
   if (open && open !== "ask") LVP.panels[open]?.();
   LVP.updateDue?.();
@@ -847,6 +856,7 @@ function applyStrings() {
   for (const b of $("tabs").querySelectorAll("button")) b.textContent = L.tabs[b.dataset.panel];
   $("s-draw").textContent = L.mark; $("draw-badge").textContent = L.drawBadge; $("ask-send").textContent = L.send; $("ask-stop").textContent = L.stop;
   $("s-frame").textContent = L.frame; $("s-stop").textContent = L.stopAtQ; $("ask-input").placeholder = L.placeholder;
+  $("back-to-video").textContent = L.backToVideo;
   $("practice-btn").textContent = L.practice; $("note-btn").textContent = L.note; $("card-btn").textContent = L.makeCard;
   buildChips();
 }
